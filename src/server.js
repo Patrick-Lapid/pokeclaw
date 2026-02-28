@@ -218,7 +218,7 @@ function readNewLines(filePath) {
   }
 }
 
-function watchFile(filePath) {
+function watchFile(filePath, { announce = false } = {}) {
   if (watchedFiles.has(filePath)) return;
 
   let stat;
@@ -240,13 +240,16 @@ function watchFile(filePath) {
 
   watchedFiles.set(filePath, state);
 
-  const sessionId = extractSessionId(filePath);
-  if (!knownSessions.has(sessionId)) {
-    knownSessions.add(sessionId);
-    broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+  // When hooks are configured, only announce sessions discovered via hooks
+  // to avoid showing dead sessions. Without hooks, fall back to JSONL scanning.
+  if (announce || !checkHooksConfigured()) {
+    const sessionId = extractSessionId(filePath);
+    if (!knownSessions.has(sessionId)) {
+      knownSessions.add(sessionId);
+      broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+    }
+    console.log(`  ◈ Watching ${path.basename(filePath)}`);
   }
-
-  console.log(`  ◈ Watching ${path.basename(filePath)}`);
 }
 
 function unwatchFile(filePath) {
@@ -356,7 +359,7 @@ function handleHook(body) {
       const tp = path.resolve(String(data.transcript_path));
       const allowedDir = path.join(os.homedir(), '.claude', 'projects');
       if (tp.endsWith('.jsonl') && tp.startsWith(allowedDir + path.sep) && fs.existsSync(tp)) {
-        watchFile(tp);
+        watchFile(tp, { announce: true });
       }
     } catch (e) {}
   }
@@ -564,12 +567,7 @@ function startServer({ port, open }) {
     if (checkHooksConfigured()) {
       console.log(`  ${green}✓${reset} Hooks configured`);
     } else {
-      console.log(`  ${yellow}⚠${reset} Hooks not configured`);
-      console.log(`  ${dim}Add this to ~/.claude/settings.json:${reset}`);
-      console.log('');
-      console.log(JSON.stringify(getHooksConfig(port), null, 2));
-      console.log('');
-      console.log(`  ${dim}Or copy from the browser setup overlay.${reset}`);
+      console.log(`  ${yellow}⚠${reset} Hooks not configured — restart agentdex to auto-configure`);
     }
 
     console.log('');
