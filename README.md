@@ -8,6 +8,9 @@ A Pokedex for your Claude Code agents. Watch your coding sessions come to life a
 
 Agentdex monitors your active [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and represents each one as a unique pixel-art creature. Creatures wander around a tile-based overworld, react to tool usage in real time, and level up as your agents work.
 
+<img width="1664" height="1308" alt="image" src="https://github.com/user-attachments/assets/eaeb1b22-a872-403a-8e76-d40762a1ca18" />
+
+
 ## Features
 
 - **Real-time activity tracking** — creatures show what your agent is doing (reading, editing, searching, running commands)
