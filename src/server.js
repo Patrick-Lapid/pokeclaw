@@ -8,8 +8,12 @@ const { WebSocketServer } = require('ws');
 
 const watchedFiles = new Map(); // path → { offset, lineBuffer, watcher, interval }
 const knownSessions = new Set();
+const endedSessions = new Set(); // sessions that have ended (SessionEnd received)
+const sessionLastSeen = new Map(); // sessionId → timestamp of last hook event
+const sessionTranscripts = new Map(); // sessionId → transcript file path
 const sessionXp = new Map(); // sessionId → number
 const sessionSpecies = new Map(); // sessionId → species index
+const recentlyCleared = new Map(); // sessionId → { timestamp, speciesIndex, xp }
 let speciesCounter = 0;
 let wss = null;
 let server = null;
@@ -123,6 +127,9 @@ function processLine(line, sessionId) {
   let obj;
   try { obj = JSON.parse(line); } catch (e) { return; }
   if (!obj || !obj.type) return;
+
+  // Don't broadcast events for sessions that have ended
+  if (endedSessions.has(sessionId)) return;
 
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
@@ -313,7 +320,9 @@ function getHooksConfig(port) {
       Stop: [noMatcher],
       SubagentStart: [noMatcher],
       SubagentStop: [noMatcher],
-      UserPromptSubmit: [noMatcher]
+      UserPromptSubmit: [noMatcher],
+      SessionStart: [noMatcher],
+      SessionEnd: [noMatcher]
     }
   };
 }
@@ -348,6 +357,12 @@ function handleHook(body) {
   const sessionId = data.session_id || 'unknown';
   const hookName = data.hook_event_name || '';
 
+  // Clear ended state if a new hook event arrives (session restarted)
+  if (hookName !== 'SessionEnd') {
+    endedSessions.delete(sessionId);
+    sessionLastSeen.set(sessionId, Date.now());
+  }
+
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
     broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
@@ -360,6 +375,7 @@ function handleHook(body) {
       const allowedDir = path.join(os.homedir(), '.claude', 'projects');
       if (tp.endsWith('.jsonl') && tp.startsWith(allowedDir + path.sep) && fs.existsSync(tp)) {
         watchFile(tp, { announce: true });
+        sessionTranscripts.set(sessionId, tp);
       }
     } catch (e) {}
   }
@@ -419,6 +435,68 @@ function handleHook(body) {
     }
     case 'UserPromptSubmit': {
       broadcast({ type: 'hook_new_turn', sessionId });
+      break;
+    }
+    case 'SessionStart': {
+      // Session started or resumed (e.g. after /clear)
+      endedSessions.delete(sessionId);
+
+      // Clean up stale sessions that never got a SessionEnd (e.g. ctrl+C'd instances).
+      // Only clean up sessions with no hook activity in the last 30s to avoid
+      // killing legitimate parallel sessions.
+      const staleThreshold = Date.now() - 30 * 1000;
+      for (const [oldId, lastSeen] of sessionLastSeen) {
+        if (oldId === sessionId || endedSessions.has(oldId)) continue;
+        if (lastSeen < staleThreshold) {
+          endedSessions.add(oldId);
+          const tp = sessionTranscripts.get(oldId);
+          if (tp) { unwatchFile(tp); sessionTranscripts.delete(oldId); }
+          broadcast({ type: 'hook_session_end', sessionId: oldId, reason: 'stale' });
+        }
+      }
+
+      // Check if this follows a /clear — transfer the old creature to this new session
+      let replacesSessionId = null;
+      for (const [oldId, info] of recentlyCleared) {
+        // Clean up stale entries (older than 10s)
+        if (Date.now() - info.timestamp > 10000) {
+          recentlyCleared.delete(oldId);
+          continue;
+        }
+        replacesSessionId = oldId;
+        // Transfer species and XP to new session
+        if (typeof info.speciesIndex === 'number') sessionSpecies.set(sessionId, info.speciesIndex);
+        if (info.xp > 0) sessionXp.set(sessionId, info.xp);
+        recentlyCleared.delete(oldId);
+        saveSessionData();
+        break;
+      }
+
+      broadcast({ type: 'hook_session_start', sessionId, replacesSessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+      break;
+    }
+    case 'SessionEnd': {
+      const reason = data.reason || '';
+      // /clear triggers SessionEnd followed by SessionStart with a NEW session ID.
+      // Store the old session so we can transfer the creature to the new session.
+      if (reason === 'clear') {
+        recentlyCleared.set(sessionId, {
+          timestamp: Date.now(),
+          speciesIndex: sessionSpecies.get(sessionId),
+          xp: sessionXp.get(sessionId) || 0
+        });
+        endedSessions.add(sessionId);
+        broadcast({ type: 'hook_session_clear', sessionId });
+        break;
+      }
+      endedSessions.add(sessionId);
+      // Stop watching the transcript file to prevent stale events
+      const tp = sessionTranscripts.get(sessionId);
+      if (tp) {
+        unwatchFile(tp);
+        sessionTranscripts.delete(sessionId);
+      }
+      broadcast({ type: 'hook_session_end', sessionId, reason });
       break;
     }
     default: {
@@ -531,8 +609,17 @@ function startServer({ port, open }) {
   }});
 
   wss.on('connection', (ws) => {
-    // Send all known sessions to new client
+    // Send all known active sessions to new client (skip ended ones)
+    const hooksActive = checkHooksConfigured();
+    const staleCutoff = Date.now() - 10 * 60 * 1000; // 10 minutes
     for (const sessionId of knownSessions) {
+      if (endedSessions.has(sessionId)) continue;
+      // When hooks are configured, only send sessions seen via hooks recently
+      // (avoids stale sessions from ctrl+C'd instances that never sent SessionEnd)
+      if (hooksActive) {
+        const lastSeen = sessionLastSeen.get(sessionId);
+        if (!lastSeen || lastSeen < staleCutoff) continue;
+      }
       try {
         ws.send(JSON.stringify({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) }));
       } catch (e) {}

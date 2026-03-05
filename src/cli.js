@@ -45,7 +45,9 @@ function getHooksConfig(p) {
     Stop: [noMatcher],
     SubagentStart: [noMatcher],
     SubagentStop: [noMatcher],
-    UserPromptSubmit: [noMatcher]
+    UserPromptSubmit: [noMatcher],
+    SessionStart: [noMatcher],
+    SessionEnd: [noMatcher]
   };
 }
 
