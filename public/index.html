@@ -443,6 +443,8 @@ function findPath(startCol, startRow, endCol, endRow) {
 // ── Creatures ────────────────────────────────────────────────────────────────
 
 var creatures = new Map()
+var removalTimers = new Map() // sessionId → timeout handle
+var endedSessions = new Set() // sessions that have ended
 var selectedId = null
 
 function createCreature(sessionId, speciesIndex) {
@@ -499,11 +501,27 @@ function createCreature(sessionId, speciesIndex) {
 function removeCreature(sessionId) {
   var cr = creatures.get(sessionId)
   if (!cr) return
+  cancelRemovalTimer(sessionId)
   if (cr.nest) cr.nest.assigned = false
   creatures.delete(sessionId)
   if (selectedId === sessionId) selectedId = null
   updatePartyBar()
   updateEncounterCount()
+}
+
+var REMOVAL_DELAY = 30000 // 30s after stop with no new activity
+
+function scheduleRemoval(sessionId) {
+  cancelRemovalTimer(sessionId)
+  removalTimers.set(sessionId, setTimeout(function() {
+    removalTimers.delete(sessionId)
+    removeCreature(sessionId)
+  }, REMOVAL_DELAY))
+}
+
+function cancelRemovalTimer(sessionId) {
+  var t = removalTimers.get(sessionId)
+  if (t) { clearTimeout(t); removalTimers.delete(sessionId) }
 }
 
 function randRange(min, max) {
@@ -1241,6 +1259,8 @@ function connectWS() {
 
 function handleMsg(m) {
   if (!m || !m.type) return
+  // Ignore events for sessions that have ended (except session_end itself)
+  if (m.sessionId && endedSessions.has(m.sessionId) && m.type !== 'hook_session_end') return
   var cr
 
   switch (m.type) {
@@ -1255,6 +1275,7 @@ function handleMsg(m) {
 
     case 'tool_start':
     case 'hook_tool_start':
+      cancelRemovalTimer(m.sessionId)
       cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
       cr.isActive = true
       cr.statusText = m.status || ('Using ' + (m.toolName || 'tool'))
@@ -1273,6 +1294,7 @@ function handleMsg(m) {
       break
 
     case 'agent_active':
+      cancelRemovalTimer(m.sessionId)
       cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
       if (!cr.isActive) cr.statusText = 'alert!'
       cr.isActive = true
@@ -1281,6 +1303,7 @@ function handleMsg(m) {
 
     case 'new_turn':
     case 'hook_new_turn':
+      cancelRemovalTimer(m.sessionId)
       cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
       cr.isActive = true
       cr.statusText = 'ready!'
@@ -1293,15 +1316,14 @@ function handleMsg(m) {
       cr = creatures.get(m.sessionId)
       if (cr) {
         cr.isActive = false
-        cr.statusText = 'resting'
-        cr.restTimer = -1
-        cr.bubbleType = 'question'
-        cr.bubbleTimer = 3
+        cr.statusText = 'idle'
+        cr.state = 'IDLE'
         updatePartyBar()
       }
       break
 
     case 'hook_notification':
+      cancelRemovalTimer(m.sessionId)
       cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
       if (m.notificationType === 'permission_prompt') {
         cr.bubbleType = 'alert'
@@ -1325,6 +1347,43 @@ function handleMsg(m) {
     case 'hook_subagent_stop':
       var subId2 = m.sessionId + ':' + m.agentId
       removeCreature(subId2)
+      break
+
+    case 'hook_session_start':
+      endedSessions.delete(m.sessionId)
+      cancelRemovalTimer(m.sessionId)
+      // If this replaces a cleared session, transfer the old creature to the new session ID
+      if (m.replacesSessionId && creatures.has(m.replacesSessionId)) {
+        cr = creatures.get(m.replacesSessionId)
+        creatures.delete(m.replacesSessionId)
+        cr.id = m.sessionId
+        creatures.set(m.sessionId, cr)
+        if (selectedId === m.replacesSessionId) selectedId = m.sessionId
+      } else {
+        cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
+      }
+      cr.isActive = true
+      cr.statusText = 'ready!'
+      if (typeof m.xp === 'number' && m.xp > cr.xp) {
+        cr.xp = m.xp
+        cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
+      }
+      updatePartyBar()
+      break
+
+    case 'hook_session_clear':
+      // /clear — briefly idle the creature but don't kill it
+      cr = creatures.get(m.sessionId)
+      if (cr) {
+        cr.isActive = false
+        cr.statusText = 'clearing\u2026'
+        updatePartyBar()
+      }
+      break
+
+    case 'hook_session_end':
+      endedSessions.add(m.sessionId)
+      removeCreature(m.sessionId)
       break
   }
 }
