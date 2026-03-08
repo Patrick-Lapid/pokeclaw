@@ -14,8 +14,21 @@ var DIR_TO_PMD = { down: 0, 'down-right': 1, right: 2, 'up-right': 3, up: 4, 'up
 var DIRS = ['down', 'down-right', 'right', 'up-right', 'up', 'up-left', 'left', 'down-left']
 
 var STATE_ANIM = { walk: 'Walk', idle: 'Idle', work: 'Pose', attack: 'Attack', shock: 'Shock', eat: 'Eat' }
-var ANIM_SPEED = { walk: 120, idle: 280, work: 280, attack: 160, shock: 200, eat: 220 }
 var PERFORM_ACTIONS = ['attack', 'shock', 'eat', 'work']
+
+var FPS_POKEMON_ANIMS = 36
+// Per-frame durations in ticks at 36 FPS (from PMD sprite data)
+var FRAME_DURATIONS = {
+  Idle:    [40, 2, 3, 3, 3, 2],
+  Walk:    [8, 10, 8, 10],
+  Pose:    [8, 8, 8],
+  Attack:  [2, 2, 6, 2, 2, 2, 2, 2, 2, 2],
+  Shock:   [8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+  Eat:     [10, 10, 10, 10],
+  Hop:     [2, 1, 2, 3, 4, 4, 3, 2, 1, 2],
+  Hurt:    [2, 8],
+  Sleep:   [30, 35]
+}
 var PERFORM_DURATION_MIN = 1500
 var PERFORM_DURATION_MAX = 3500
 
@@ -99,7 +112,8 @@ function findPath(sc, sr, ec, er) {
 
 var spriteSheet = null
 var spriteFrames = {}
-var spriteAnims = {}
+var spriteAnims = {}    // { "Walk_Anim_0": [frame, ...] }
+var shadowAnims = {}    // { "Walk_Shadow_0": [frame, ...] }
 var spriteReady = false
 
 function loadSpriteSheet(callback) {
@@ -134,20 +148,33 @@ function parseSpriteData(data) {
     }
   }
 
+  // Build anim and shadow sequences
   var animMap = {}
+  var shadowMap = {}
   for (var i = 0; i < frames.length; i++) {
     var fn = frames[i].filename
     var parts = fn.split('/')
-    if (parts[0] !== 'Normal' || parts[2] !== 'Anim') continue
+    if (parts[0] !== 'Normal') continue
+    var target = null
+    if (parts[2] === 'Anim') target = animMap
+    else if (parts[2] === 'Shadow') target = shadowMap
+    else continue
     var key = parts[1] + '_' + parts[3]
-    if (!animMap[key]) animMap[key] = []
-    animMap[key].push({ num: parts[4], filename: fn })
+    if (!target[key]) target[key] = []
+    target[key].push({ num: parts[4], filename: fn })
   }
 
-  for (var key in animMap) {
-    animMap[key].sort(function(a, b) { return a.num.localeCompare(b.num) })
-    spriteAnims[key] = animMap[key].map(function(e) { return spriteFrames[e.filename] })
+  function buildLookup(map) {
+    var result = {}
+    for (var key in map) {
+      map[key].sort(function(a, b) { return a.num.localeCompare(b.num) })
+      result[key] = map[key].map(function(e) { return spriteFrames[e.filename] })
+    }
+    return result
   }
+
+  spriteAnims = buildLookup(animMap)
+  shadowAnims = buildLookup(shadowMap)
 }
 
 function getSpriteFrames(state, dir) {
@@ -155,7 +182,11 @@ function getSpriteFrames(state, dir) {
   var pmdDir = DIR_TO_PMD[dir]
   if (pmdDir === undefined) pmdDir = 0
   var key = animName + '_' + pmdDir
-  return spriteAnims[key] || spriteAnims['Idle_0'] || []
+  return {
+    anim: spriteAnims[key] || spriteAnims['Idle_0'] || [],
+    shadow: shadowAnims[key] || shadowAnims['Idle_0'] || [],
+    durations: FRAME_DURATIONS[animName] || FRAME_DURATIONS['Idle']
+  }
 }
 
 // Camera
@@ -324,18 +355,25 @@ function CreatureEntity(sessionId, species, startCol, startRow, nestRef) {
   this.animTimer = 0
 }
 
-CreatureEntity.prototype.getAnimFrames = function() {
+CreatureEntity.prototype.getAnimData = function() {
   return getSpriteFrames(this.state, this.dir)
 }
 
+CreatureEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
+  if (!durations || durations.length === 0) return 200
+  var ticks = durations[frameIndex % durations.length] || 1
+  return ticks * (1000 / FPS_POKEMON_ANIMS)
+}
+
 CreatureEntity.prototype.update = function(dt) {
+  // Per-frame duration animation
+  var data = this.getAnimData()
   this.animTimer += dt
-  var speed = ANIM_SPEED[this.state] || 200
-  if (this.animTimer >= speed) {
-    this.animTimer = 0
-    var frames = this.getAnimFrames()
-    if (frames.length > 0) {
-      this.animFrame = (this.animFrame + 1) % frames.length
+  var frameDur = this.getFrameDurationMs(data.durations, this.animFrame)
+  if (this.animTimer >= frameDur) {
+    this.animTimer -= frameDur
+    if (data.anim.length > 0) {
+      this.animFrame = (this.animFrame + 1) % data.anim.length
     }
   }
 
@@ -350,6 +388,7 @@ CreatureEntity.prototype.update = function(dt) {
     if (this.performTimer <= 0) {
       this.state = 'idle'
       this.animFrame = 0
+      this.animTimer = 0
       this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
     }
     return
@@ -363,6 +402,7 @@ CreatureEntity.prototype.update = function(dt) {
         var action = PERFORM_ACTIONS[Math.floor(Math.random() * PERFORM_ACTIONS.length)]
         this.state = action
         this.animFrame = 0
+        this.animTimer = 0
         this.performTimer = randRange(PERFORM_DURATION_MIN, PERFORM_DURATION_MAX)
         this.dir = DIRS[Math.floor(Math.random() * DIRS.length)]
       } else {
@@ -378,6 +418,7 @@ CreatureEntity.prototype.update = function(dt) {
           this.state = 'walk'
           this.moveProgress = 0
           this.animFrame = 0
+          this.animTimer = 0
         }
       }
       this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
@@ -430,48 +471,98 @@ CreatureEntity.prototype.finishWalk = function() {
   this.state = 'idle'
   this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
   this.animFrame = 0
+  this.animTimer = 0
 }
 
 CreatureEntity.prototype.draw = function(ctx) {
   if (!spriteReady) return
 
-  var frames = this.getAnimFrames()
-  if (frames.length === 0) return
+  var data = this.getAnimData()
+  if (data.anim.length === 0) return
 
-  var frame = frames[this.animFrame % frames.length]
+  var frameIdx = this.animFrame % data.anim.length
+  var frame = data.anim[frameIdx]
   var screen = worldToScreen(this.x, this.y)
   var scale = camera.zoom * 0.55
 
-  // Center-anchor sprite on its sourceSize (like Phaser origin 0.5/0.5)
+  // Center-anchor on sourceSize
   var cx = screen.x - (frame.sw / 2) * scale
   var cy = screen.y - (frame.sh / 2) * scale
-  var shadowY = screen.y + 5 * scale
+
+  // Draw shadow from sprite sheet
+  if (data.shadow.length > 0) {
+    var sf = data.shadow[frameIdx % data.shadow.length]
+    var scx = screen.x - (sf.sw / 2) * scale
+    var scy = screen.y - (sf.sh / 2) * scale
+
+    ctx.drawImage(
+      spriteSheet,
+      sf.x, sf.y, sf.w, sf.h,
+      scx + sf.ox * scale, scy + sf.oy * scale,
+      sf.w * scale, sf.h * scale
+    )
+  }
+
+  // Draw sprite (with selection outline + tint if selected)
+  var drawX = cx + frame.ox * scale
+  var drawY = cy + frame.oy * scale
+  var drawW = frame.w * scale
+  var drawH = frame.h * scale
 
   if (this.id === selectedId) {
     var typeColor = TYPE_COLORS[this.species.type] || '#ffffff'
+    if (!CreatureEntity._selCanvas) {
+      CreatureEntity._selCanvas = document.createElement('canvas')
+      CreatureEntity._selCtx = CreatureEntity._selCanvas.getContext('2d')
+    }
+    var sc2 = CreatureEntity._selCanvas
+    var sctx = CreatureEntity._selCtx
+    var pw = Math.ceil(frame.w) + 4
+    var ph = Math.ceil(frame.h) + 4
+    sc2.width = pw
+    sc2.height = ph
+    sctx.clearRect(0, 0, pw, ph)
+    sctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2, 2, frame.w, frame.h)
+
+    // Outline: draw the sprite offset in 4 directions, then composite the color
+    sctx.globalCompositeOperation = 'source-over'
+    if (!CreatureEntity._outlineCanvas) {
+      CreatureEntity._outlineCanvas = document.createElement('canvas')
+      CreatureEntity._outlineCtx = CreatureEntity._outlineCanvas.getContext('2d')
+    }
+    var outlineCanvas = CreatureEntity._outlineCanvas
+    var octx = CreatureEntity._outlineCtx
+    outlineCanvas.width = pw
+    outlineCanvas.height = ph
+    var offsets = [[-1,0],[1,0],[0,-1],[0,1]]
+    for (var oi = 0; oi < offsets.length; oi++) {
+      octx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2 + offsets[oi][0], 2 + offsets[oi][1], frame.w, frame.h)
+    }
+    // Color the outline
+    octx.globalCompositeOperation = 'source-atop'
+    octx.fillStyle = typeColor
+    octx.fillRect(0, 0, pw, ph)
+    octx.globalCompositeOperation = 'destination-out'
+    octx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2, 2, frame.w, frame.h)
+
+    // Draw outline behind sprite
+    ctx.drawImage(outlineCanvas, drawX - 2 * scale, drawY - 2 * scale, pw * scale, ph * scale)
+
+    // Draw sprite with slight tint overlay
+    ctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, drawX, drawY, drawW, drawH)
     ctx.save()
-    ctx.globalAlpha = 0.25
-    ctx.fillStyle = typeColor
-    ctx.beginPath()
-    ctx.ellipse(screen.x, shadowY, 10 * scale, 4 * scale, 0, 0, Math.PI * 2)
-    ctx.fill()
+    ctx.globalAlpha = 0.15
+    sctx.clearRect(0, 0, pw, ph)
+    sctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h)
+    sctx.globalCompositeOperation = 'source-atop'
+    sctx.fillStyle = typeColor
+    sctx.fillRect(0, 0, frame.w, frame.h)
+    sctx.globalCompositeOperation = 'source-over'
+    ctx.drawImage(sc2, 0, 0, frame.w, frame.h, drawX, drawY, drawW, drawH)
     ctx.restore()
+  } else {
+    ctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, drawX, drawY, drawW, drawH)
   }
-
-  ctx.save()
-  ctx.globalAlpha = 0.45
-  ctx.fillStyle = '#000000'
-  ctx.beginPath()
-  ctx.ellipse(screen.x, shadowY, 7 * scale, 2 * scale, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-
-  ctx.drawImage(
-    spriteSheet,
-    frame.x, frame.y, frame.w, frame.h,
-    cx + frame.ox * scale, cy + frame.oy * scale,
-    frame.w * scale, frame.h * scale
-  )
 
   var lvFontSize = Math.max(5, Math.round(6 * camera.zoom / 3))
   var spriteTop = screen.y - 16 * scale
@@ -748,6 +839,7 @@ function handleMsg(m) {
         cr.statusText = 'idle'
         cr.state = 'idle'
         cr.animFrame = 0
+        cr.animTimer = 0
         updatePartyBar()
       }
       break
