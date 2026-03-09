@@ -20,7 +20,7 @@
   --hp-red: #f85848;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box }
+* { margin: 0; padding: 0; box-sizing: border-box; cursor: url('/assets/cursor-hover.png') 4 2, auto }
 
 body {
   background: var(--bg);
@@ -30,6 +30,9 @@ body {
   overflow: hidden;
   user-select: none;
 }
+
+#game-container canvas { cursor: url('/assets/cursor-grab.png') 12 12, grab }
+#game-container canvas:active { cursor: url('/assets/cursor-grabbing.png') 12 12, grabbing }
 
 #game-container {
   position: absolute;
@@ -128,7 +131,7 @@ body {
   color: var(--accent);
   font-family: 'Press Start 2P', monospace;
   font-size: 12px;
-  cursor: pointer;
+  cursor: url('/assets/cursor-hover.png') 4 2, pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -157,7 +160,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
+  cursor: url('/assets/cursor-hover.png') 4 2, pointer;
   min-width: 120px;
 }
 
@@ -231,7 +234,7 @@ body {
   padding: 8px 16px;
   font-family: 'Press Start 2P', monospace;
   font-size: 10px;
-  cursor: pointer;
+  cursor: url('/assets/cursor-hover.png') 4 2, pointer;
   margin-right: 8px;
 }
 

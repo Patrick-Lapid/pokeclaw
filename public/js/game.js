@@ -246,14 +246,42 @@ function resizeCanvas() {
 
 // Input
 
-var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0 }
+var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0, target: null }
+
+function hitTestCreature(sx, sy) {
+  var world = screenToWorld(sx, sy)
+  var hit = null
+  var minDist = TILE * 1.5
+  creatures.forEach(function(cr) {
+    var dx = world.x - cr.x
+    var dy = world.y - cr.y
+    var dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist < minDist) {
+      minDist = dist
+      hit = cr
+    }
+  })
+  return hit
+}
 
 function initInput() {
   canvas.addEventListener('pointerdown', function(e) {
+    var rect = canvas.getBoundingClientRect()
+    var sx = e.clientX - rect.left
+    var sy = e.clientY - rect.top
+    var hit = hitTestCreature(sx, sy)
+
     dragState.dragging = true
     dragState.moved = false
     dragState.lastX = e.clientX
     dragState.lastY = e.clientY
+    dragState.target = hit
+
+    if (hit) {
+      selectedId = hit.id
+      updatePartyBar()
+      canvas.style.cursor = "url('/assets/cursor-grabbing.png') 12 12, grabbing"
+    }
   })
 
   window.addEventListener('pointermove', function(e) {
@@ -261,18 +289,45 @@ function initInput() {
     var dx = e.clientX - dragState.lastX
     var dy = e.clientY - dragState.lastY
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragState.moved = true
-    camera.x -= dx / camera.zoom
-    camera.y -= dy / camera.zoom
+
+    if (dragState.target) {
+      // Drag creature
+      var cr = dragState.target
+      cr.x += dx / camera.zoom
+      cr.y += dy / camera.zoom
+      cr.col = Math.round((cr.x - TILE / 2) / TILE)
+      cr.row = Math.round((cr.y - TILE / 2) / TILE)
+    } else {
+      // Pan camera
+      camera.x -= dx / camera.zoom
+      camera.y -= dy / camera.zoom
+    }
+
     dragState.lastX = e.clientX
     dragState.lastY = e.clientY
   })
 
   window.addEventListener('pointerup', function(e) {
-    if (!dragState.moved && dragState.dragging) {
+    if (dragState.target) {
+      // Snap creature to grid on drop
+      var cr = dragState.target
+      cr.col = Math.max(0, Math.min(COLS - 1, Math.round((cr.x - TILE / 2) / TILE)))
+      cr.row = Math.max(0, Math.min(ROWS - 1, Math.round((cr.y - TILE / 2) / TILE)))
+      cr.x = cr.col * TILE + TILE / 2
+      cr.y = cr.row * TILE + TILE / 2
+      // Resume wandering from new position
+      cr.path = []
+      cr.state = 'idle'
+      cr.animFrame = 0
+      cr.animTimer = 0
+      cr.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
+      canvas.style.cursor = "url('/assets/cursor-grab.png') 12 12, grab"
+    } else if (!dragState.moved && dragState.dragging) {
       var rect = canvas.getBoundingClientRect()
       handleClick(e.clientX - rect.left, e.clientY - rect.top)
     }
     dragState.dragging = false
+    dragState.target = null
   })
 
   canvas.addEventListener('wheel', function(e) {
