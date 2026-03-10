@@ -279,6 +279,11 @@ function initInput() {
 
     if (hit) {
       selectedId = hit.id
+      hit.state = 'idle'
+      hit.path = []
+      hit.moveProgress = 0
+      hit.animFrame = 0
+      hit.animTimer = 0
       updatePartyBar()
       canvas.style.cursor = "url('/assets/cursor-grabbing.png') 12 12, grabbing"
     }
@@ -421,6 +426,7 @@ CreatureEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
 }
 
 CreatureEntity.prototype.update = function(dt) {
+  if (dragState.target === this) return
   // Per-frame duration animation
   var data = this.getAnimData()
   this.animTimer += dt
