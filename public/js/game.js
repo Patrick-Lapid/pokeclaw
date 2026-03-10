@@ -214,6 +214,22 @@ function getSpriteFrames(state, dir) {
 
 var camera = { x: 0, y: 0, zoom: 3, minZoom: 1, maxZoom: 6 }
 
+var MAP_W = COLS * TILE
+var MAP_H = ROWS * TILE
+
+function clampCamera() {
+  // Compute minimum zoom so at most 70% of the map is visible
+  var fitZoom = Math.max(canvas.width / MAP_W, canvas.height / MAP_H) / 0.7
+  camera.minZoom = fitZoom
+  if (camera.zoom < camera.minZoom) camera.zoom = camera.minZoom
+
+  // Clamp pan so no area outside the map is visible
+  var halfViewW = (canvas.width / 2) / camera.zoom
+  var halfViewH = (canvas.height / 2) / camera.zoom
+  camera.x = Math.max(halfViewW, Math.min(MAP_W - halfViewW, camera.x))
+  camera.y = Math.max(halfViewH, Math.min(MAP_H - halfViewH, camera.y))
+}
+
 function worldToScreen(wx, wy) {
   var cx = canvas.width / 2
   var cy = canvas.height / 2
@@ -262,6 +278,7 @@ function resizeCanvas() {
   canvas.width = container.clientWidth
   canvas.height = container.clientHeight
   ctx.imageSmoothingEnabled = false
+  clampCamera()
   drawStaticTerrain()
 }
 
@@ -327,6 +344,7 @@ function initInput() {
       // Pan camera
       camera.x -= dx / camera.zoom
       camera.y -= dy / camera.zoom
+      clampCamera()
     }
 
     dragState.lastX = e.clientX
@@ -360,13 +378,16 @@ function initInput() {
     e.preventDefault()
     var delta = e.deltaY > 0 ? -0.25 : 0.25
     camera.zoom = Math.max(camera.minZoom, Math.min(camera.maxZoom, camera.zoom + delta))
+    clampCamera()
   }, { passive: false })
 
   document.getElementById('zoomIn').addEventListener('click', function() {
     camera.zoom = Math.min(camera.maxZoom, camera.zoom + 0.5)
+    clampCamera()
   })
   document.getElementById('zoomOut').addEventListener('click', function() {
     camera.zoom = Math.max(camera.minZoom, camera.zoom - 0.5)
+    clampCamera()
   })
 }
 
@@ -805,6 +826,7 @@ function updatePartyBar() {
       selectedId = cr.id
       camera.x = cr.x
       camera.y = cr.y
+      clampCamera()
       updatePartyBar()
     }
 
