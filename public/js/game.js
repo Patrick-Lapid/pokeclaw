@@ -2,9 +2,9 @@
 // PMD-style sprite sheet (0025.png + 0025.json)
 // Directions: 0=down, 1=down-right, 2=right, 3=up-right, 4=up, 5=up-left, 6=left, 7=down-left
 
-var TILE = 16
-var COLS = 24
-var ROWS = 16
+var TILE = 24
+var COLS = 50
+var ROWS = 32
 var WALK_SPEED = 38
 var WANDER_PAUSE_MIN = 3000
 var WANDER_PAUSE_MAX = 9000
@@ -42,21 +42,26 @@ var TYPE_COLORS = {
 }
 
 var NESTS = [
-  { id: 'nest-0', col: 2, row: 2, dir: 'down', assigned: false },
-  { id: 'nest-1', col: 4, row: 2, dir: 'down', assigned: false },
-  { id: 'nest-2', col: 6, row: 2, dir: 'down', assigned: false },
-  { id: 'nest-3', col: 3, row: 3, dir: 'down', assigned: false },
-  { id: 'nest-4', col: 5, row: 3, dir: 'down', assigned: false },
-  { id: 'nest-5', col: 2, row: 4, dir: 'right', assigned: false },
-  { id: 'nest-6', col: 4, row: 4, dir: 'down', assigned: false },
-  { id: 'nest-7', col: 6, row: 4, dir: 'left', assigned: false },
-  { id: 'nest-8', col: 3, row: 5, dir: 'down', assigned: false },
-  { id: 'nest-9', col: 5, row: 5, dir: 'down', assigned: false }
+  { id: 'nest-0', col: 16, row: 6, dir: 'down', assigned: false },
+  { id: 'nest-1', col: 20, row: 6, dir: 'down', assigned: false },
+  { id: 'nest-2', col: 24, row: 6, dir: 'down', assigned: false },
+  { id: 'nest-3', col: 18, row: 8, dir: 'down', assigned: false },
+  { id: 'nest-4', col: 22, row: 8, dir: 'down', assigned: false },
+  { id: 'nest-5', col: 16, row: 10, dir: 'right', assigned: false },
+  { id: 'nest-6', col: 20, row: 10, dir: 'down', assigned: false },
+  { id: 'nest-7', col: 24, row: 10, dir: 'left', assigned: false },
+  { id: 'nest-8', col: 18, row: 12, dir: 'down', assigned: false },
+  { id: 'nest-9', col: 22, row: 12, dir: 'down', assigned: false }
 ]
 
 // Tile map
 
 var tileData = []
+var townMapData = null    // parsed town.json
+var tilesetImage = null   // tileset.png
+var tilesetReady = false
+var TILESET_COLS = 25     // tileset.png is 600px wide / 24px per tile
+var TILESET_TILE = 24     // each tile in the tileset is 24x24
 
 function initTileData() {
   for (var r = 0; r < ROWS; r++) {
@@ -65,6 +70,22 @@ function initTileData() {
       tileData[r][c] = ((r + c) % 2 === 0) ? 1 : 2
     }
   }
+}
+
+function loadTileset(callback) {
+  var img = new Image()
+  img.onload = function() {
+    tilesetImage = img
+    fetch('/assets/town.json')
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        townMapData = data
+        tilesetReady = true
+        drawStaticTerrain()
+        if (callback) callback()
+      })
+  }
+  img.src = '/assets/tileset.png'
 }
 
 // Pathfinding
@@ -376,10 +397,37 @@ function drawStaticTerrain() {
   var g = terrainCtx
   g.clearRect(0, 0, terrainCanvas.width, terrainCanvas.height)
 
-  for (var r = 0; r < ROWS; r++) {
-    for (var c = 0; c < COLS; c++) {
-      g.fillStyle = (tileData[r][c] === 1) ? '#2d5a1e' : '#275018'
-      g.fillRect(c * TILE, r * TILE, TILE, TILE)
+  if (!tilesetReady || !townMapData || !tilesetImage) {
+    // Fallback checkerboard while loading
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        g.fillStyle = (tileData[r][c] === 1) ? '#2d5a1e' : '#275018'
+        g.fillRect(c * TILE, r * TILE, TILE, TILE)
+      }
+    }
+    return
+  }
+
+  // Render each layer from the Tiled map
+  var layers = townMapData.layers
+  for (var li = 0; li < layers.length; li++) {
+    var layer = layers[li]
+    if (layer.type !== 'tilelayer' || !layer.visible) continue
+    var data = layer.data
+    var w = layer.width
+    for (var i = 0; i < data.length; i++) {
+      var tileId = data[i]
+      if (tileId <= 0) continue // 0 = empty/transparent
+      tileId -= 1 // Tiled uses 1-based indices
+      var srcCol = tileId % TILESET_COLS
+      var srcRow = Math.floor(tileId / TILESET_COLS)
+      var destCol = i % w
+      var destRow = Math.floor(i / w)
+      g.drawImage(
+        tilesetImage,
+        srcCol * TILESET_TILE, srcRow * TILESET_TILE, TILESET_TILE, TILESET_TILE,
+        destCol * TILE, destRow * TILE, TILE, TILE
+      )
     }
   }
 }
@@ -703,7 +751,7 @@ function createCreature(sessionId, speciesIndex) {
     }
   }
 
-  var cr = new CreatureEntity(sessionId, sp, nest ? nest.col : 12, nest ? nest.row : 8, nest)
+  var cr = new CreatureEntity(sessionId, sp, nest ? nest.col : 25, nest ? nest.row : 16, nest)
   creatures.set(sessionId, cr)
   updatePartyBar()
   updateEncounterCount()
@@ -1011,8 +1059,10 @@ document.getElementById('close-setup').addEventListener('click', function() {
 
 updateEncounterCount()
 
-loadSpriteSheet(function() {
-  connectWS()
-  lastTime = performance.now()
-  requestAnimationFrame(gameLoop)
+loadTileset(function() {
+  loadSpriteSheet(function() {
+    connectWS()
+    lastTime = performance.now()
+    requestAnimationFrame(gameLoop)
+  })
 })
