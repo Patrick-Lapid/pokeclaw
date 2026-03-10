@@ -613,7 +613,7 @@ CreatureEntity.prototype.draw = function(ctx) {
   var frameIdx = this.animFrame % data.anim.length
   var frame = data.anim[frameIdx]
   var screen = worldToScreen(this.x, this.y)
-  var scale = camera.zoom * 0.55
+  var scale = camera.zoom * 1.0
 
   // Center-anchor on sourceSize
   var cx = screen.x - (frame.sw / 2) * scale
@@ -830,10 +830,11 @@ function updatePartyBar() {
       updatePartyBar()
     }
 
-    var dot = document.createElement('div')
-    dot.className = 'party-dot'
-    dot.style.background = TYPE_COLORS[cr.species.type] || '#888'
-    div.appendChild(dot)
+    var portrait = document.createElement('img')
+    portrait.className = 'party-portrait'
+    portrait.src = '/assets/portraits/0025.png'
+    portrait.alt = cr.species.name
+    div.appendChild(portrait)
 
     var info = document.createElement('div')
     info.className = 'party-info'
