@@ -251,7 +251,7 @@ var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0, target: nul
 function hitTestCreature(sx, sy) {
   var world = screenToWorld(sx, sy)
   var hit = null
-  var minDist = TILE * 1.5
+  var minDist = TILE * 0.75
   creatures.forEach(function(cr) {
     var dx = world.x - cr.x
     var dy = world.y - cr.y
@@ -352,7 +352,7 @@ function initInput() {
 function handleClick(sx, sy) {
   var world = screenToWorld(sx, sy)
   var hit = null
-  var minDist = TILE * 2
+  var minDist = TILE * 0.75
 
   creatures.forEach(function(cr) {
     var dx = world.x - cr.x
