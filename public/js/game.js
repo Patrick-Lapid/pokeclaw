@@ -5,7 +5,13 @@
 var TILE = 24
 var COLS = 50
 var ROWS = 32
-var WALK_SPEED = 38
+
+// Walkable board area (matching PAC's board position in the town map)
+var BOARD_COL_MIN = 13
+var BOARD_COL_MAX = 28
+var BOARD_ROW_MIN = 3
+var BOARD_ROW_MAX = 14
+var WALK_SPEED = 50
 var WANDER_PAUSE_MIN = 3000
 var WANDER_PAUSE_MAX = 9000
 var REMOVAL_DELAY = 30000
@@ -91,7 +97,7 @@ function loadTileset(callback) {
 // Pathfinding
 
 function isWalkable(col, row) {
-  return col >= 0 && col < COLS && row >= 0 && row < ROWS
+  return col >= BOARD_COL_MIN && col <= BOARD_COL_MAX && row >= BOARD_ROW_MIN && row <= BOARD_ROW_MAX
 }
 
 function findPath(sc, sr, ec, er) {
@@ -212,7 +218,7 @@ function getSpriteFrames(state, dir) {
 
 // Camera
 
-var camera = { x: 0, y: 0, zoom: 3, minZoom: 1, maxZoom: 6 }
+var camera = { x: 0, y: 0, zoom: 0, minZoom: 1, maxZoom: 6 }
 
 var MAP_W = COLS * TILE
 var MAP_H = ROWS * TILE
@@ -267,10 +273,10 @@ function initCanvas() {
   terrainCanvas.height = ROWS * TILE
   terrainCtx = terrainCanvas.getContext('2d')
 
+  camera.x = ((BOARD_COL_MIN + BOARD_COL_MAX) / 2 + 0.5) * TILE
+  camera.y = ((BOARD_ROW_MIN + BOARD_ROW_MAX) / 2 + 0.5) * TILE
   resizeCanvas()
   window.addEventListener('resize', resizeCanvas)
-  camera.x = (COLS * TILE) / 2
-  camera.y = (ROWS * TILE) / 2
 }
 
 function resizeCanvas() {
@@ -355,8 +361,8 @@ function initInput() {
     if (dragState.target) {
       // Snap creature to grid on drop
       var cr = dragState.target
-      cr.col = Math.max(0, Math.min(COLS - 1, Math.round((cr.x - TILE / 2) / TILE)))
-      cr.row = Math.max(0, Math.min(ROWS - 1, Math.round((cr.y - TILE / 2) / TILE)))
+      cr.col = Math.max(BOARD_COL_MIN, Math.min(BOARD_COL_MAX, Math.round((cr.x - TILE / 2) / TILE)))
+      cr.row = Math.max(BOARD_ROW_MIN, Math.min(BOARD_ROW_MAX, Math.round((cr.y - TILE / 2) / TILE)))
       cr.x = cr.col * TILE + TILE / 2
       cr.y = cr.row * TILE + TILE / 2
       // Resume wandering from new position
@@ -537,8 +543,8 @@ CreatureEntity.prototype.update = function(dt) {
         this.dir = DIRS[Math.floor(Math.random() * DIRS.length)]
       } else {
         for (var att = 0; att < 20; att++) {
-          var rc = 1 + Math.floor(Math.random() * (COLS - 2))
-          var rr = 1 + Math.floor(Math.random() * (ROWS - 2))
+          var rc = BOARD_COL_MIN + Math.floor(Math.random() * (BOARD_COL_MAX - BOARD_COL_MIN + 1))
+          var rr = BOARD_ROW_MIN + Math.floor(Math.random() * (BOARD_ROW_MAX - BOARD_ROW_MIN + 1))
           if (isWalkable(rc, rr)) {
             this.path = findPath(this.col, this.row, rc, rr)
             if (this.path.length > 0 && this.path.length < 15) break
