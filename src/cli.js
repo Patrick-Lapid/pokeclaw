@@ -5,16 +5,25 @@ const path = require('path');
 const os = require('os');
 const readline = require('readline');
 const { startServer } = require('./server');
+const { checkHooks, installHooks, uninstallHooks } = require('./hooks');
 
 const args = process.argv.slice(2);
+
+const dim = '\x1b[2m';
+const reset = '\x1b[0m';
+const bold = '\x1b[1m';
+const yellow = '\x1b[33m';
+const green = '\x1b[32m';
+const red = '\x1b[31m';
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log('Usage: agentdex [options]');
   console.log('');
   console.log('Options:');
-  console.log('  --port <number>  Port to listen on (default: 3000)');
-  console.log('  --no-open        Do not auto-open browser');
-  console.log('  --help, -h       Show this help message');
+  console.log('  --port <number>     Port to listen on (default: 3000)');
+  console.log('  --no-open           Do not auto-open browser');
+  console.log('  --uninstall-hooks   Remove agentdex hooks from ~/.claude/settings.json');
+  console.log('  --help, -h          Show this help message');
   process.exit(0);
 }
 
@@ -29,74 +38,19 @@ if (portIdx !== -1 && args[portIdx + 1]) {
 
 const noOpen = args.includes('--no-open');
 
-// ── Auto-configure hooks ──────────────────────────────────────────────────────
+// ── Uninstall hooks ─────────────────────────────────────────────────────────
 
-const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
-
-function getHooksConfig(p) {
-  const curlCmd = `curl -s -X POST http://127.0.0.1:${p}/hook -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
-  const hook = { type: "command", command: curlCmd };
-  const matchAll = { matcher: "", hooks: [hook] };
-  const noMatcher = { hooks: [hook] };
-  return {
-    PreToolUse: [matchAll],
-    PostToolUse: [matchAll],
-    Notification: [matchAll],
-    Stop: [noMatcher],
-    SubagentStart: [noMatcher],
-    SubagentStop: [noMatcher],
-    UserPromptSubmit: [noMatcher],
-    SessionStart: [noMatcher],
-    SessionEnd: [noMatcher]
-  };
-}
-
-function isHooksConfigured() {
-  try {
-    const data = fs.readFileSync(SETTINGS_PATH, 'utf8');
-    const settings = JSON.parse(data);
-    if (settings.hooks && settings.hooks.PreToolUse) {
-      const entries = settings.hooks.PreToolUse;
-      if (Array.isArray(entries)) {
-        for (const entry of entries) {
-          for (const h of (entry.hooks || [])) {
-            if (h.command && h.command.includes('/hook')) return true;
-          }
-        }
-      }
-    }
-  } catch (e) {}
-  return false;
-}
-
-function installHooks() {
-  let settings = {};
-  try {
-    const data = fs.readFileSync(SETTINGS_PATH, 'utf8');
-    settings = JSON.parse(data);
-  } catch (e) {}
-
-  if (!settings.hooks) settings.hooks = {};
-
-  const hooksConfig = getHooksConfig(port);
-  for (const [event, entries] of Object.entries(hooksConfig)) {
-    if (!settings.hooks[event]) {
-      settings.hooks[event] = entries;
-    } else {
-      // Check if agentdex hook already exists in this event
-      const existing = settings.hooks[event];
-      const hasAgentdex = existing.some(entry =>
-        (entry.hooks || []).some(h => h.command && h.command.includes('/hook'))
-      );
-      if (!hasAgentdex) {
-        settings.hooks[event] = existing.concat(entries);
-      }
-    }
+if (args.includes('--uninstall-hooks')) {
+  const removed = uninstallHooks();
+  if (removed) {
+    console.log(`  ${green}✓${reset}  Agentdex hooks removed from ~/.claude/settings.json`);
+  } else {
+    console.log(`  ${dim}No agentdex hooks found in ~/.claude/settings.json${reset}`);
   }
-
-  fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true });
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  process.exit(0);
 }
+
+// ── Auto-configure hooks ────────────────────────────────────────────────────
 
 function prompt(question) {
   return new Promise((resolve) => {
@@ -108,27 +62,44 @@ function prompt(question) {
   });
 }
 
-async function main() {
-  if (!isHooksConfigured()) {
-    const dim = '\x1b[2m';
-    const reset = '\x1b[0m';
-    const yellow = '\x1b[33m';
-    const green = '\x1b[32m';
+async function ensureHooks() {
+  const status = checkHooks();
 
-    console.log('');
-    console.log(`  ${yellow}⚠${reset}  Claude Code hooks not configured.`);
-    console.log(`  ${dim}Hooks let agentdex see your agents in real time.${reset}`);
-    console.log('');
-
-    const answer = await prompt(`  Configure hooks automatically? ${dim}(Y/n)${reset} `);
-
-    if (answer === '' || answer === 'y' || answer === 'yes') {
-      installHooks();
-      console.log(`  ${green}✓${reset}  Hooks installed in ~/.claude/settings.json`);
+  if (status.installed && status.port === port) {
+    // Hooks exist with correct port — ensure all events are covered
+    const result = installHooks(port);
+    if (result === 'updated') {
+      console.log(`  ${green}✓${reset}  Hooks updated (added missing events)`);
       console.log('');
     }
+    return;
   }
 
+  if (status.installed && status.port !== port) {
+    // Hooks exist but on a different port — update silently
+    installHooks(port);
+    console.log(`  ${green}✓${reset}  Hooks updated to port ${port} ${dim}(was ${status.port})${reset}`);
+    console.log('');
+    return;
+  }
+
+  // No hooks installed — prompt user
+  console.log('');
+  console.log(`  ${yellow}!${reset}  Claude Code hooks not configured.`);
+  console.log(`  ${dim}Hooks let agentdex see your agents in real time.${reset}`);
+  console.log('');
+
+  const answer = await prompt(`  Configure hooks automatically? ${dim}(Y/n)${reset} `);
+
+  if (answer === '' || answer === 'y' || answer === 'yes') {
+    installHooks(port);
+    console.log(`  ${green}✓${reset}  Hooks installed in ~/.claude/settings.json`);
+    console.log('');
+  }
+}
+
+async function main() {
+  await ensureHooks();
   startServer({ port, open: !noOpen });
 }
 

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
+const { checkHooks, getHooksConfig } = require('./hooks');
 
 // ── State ──────────────────────────────────────────────────────────────────────
 
@@ -305,46 +306,10 @@ function scanProjects() {
   }
 }
 
-// ── Hooks config ───────────────────────────────────────────────────────────────
-
-function getHooksConfig(port) {
-  const curlCmd = `curl -s -X POST http://127.0.0.1:${port}/hook -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
-  const hook = { type: "command", command: curlCmd };
-  const matchAll = { matcher: "", hooks: [hook] };
-  const noMatcher = { hooks: [hook] };
-  return {
-    hooks: {
-      PreToolUse: [matchAll],
-      PostToolUse: [matchAll],
-      Notification: [matchAll],
-      Stop: [noMatcher],
-      SubagentStart: [noMatcher],
-      SubagentStop: [noMatcher],
-      UserPromptSubmit: [noMatcher],
-      SessionStart: [noMatcher],
-      SessionEnd: [noMatcher]
-    }
-  };
-}
+// ── Hooks (uses shared hooks.js module) ─────────────────────────────────────
 
 function checkHooksConfigured() {
-  const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
-  try {
-    const data = fs.readFileSync(settingsPath, 'utf8');
-    const settings = JSON.parse(data);
-    if (settings.hooks && settings.hooks.PreToolUse) {
-      const entries = settings.hooks.PreToolUse;
-      if (Array.isArray(entries)) {
-        for (const entry of entries) {
-          const hooks = entry.hooks || [];
-          for (const h of hooks) {
-            if (h.command && h.command.includes('/hook')) return true;
-          }
-        }
-      }
-    }
-  } catch (e) { /* settings file missing or invalid */ }
-  return false;
+  return checkHooks().installed;
 }
 
 // ── Hook event handling ────────────────────────────────────────────────────────
