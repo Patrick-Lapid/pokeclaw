@@ -82,7 +82,7 @@ function loadTileset(callback) {
   var img = new Image()
   img.onload = function() {
     tilesetImage = img
-    fetch('/assets/town.json')
+    fetch('/assets/tilemaps/town.json')
       .then(function(r) { return r.json() })
       .then(function(data) {
         townMapData = data
@@ -91,7 +91,7 @@ function loadTileset(callback) {
         if (callback) callback()
       })
   }
-  img.src = '/assets/tileset.png'
+  img.src = '/assets/tilemaps/tileset.png'
 }
 
 // Pathfinding
@@ -147,7 +147,7 @@ function loadSpriteSheet(callback) {
   var img = new Image()
   img.onload = function() {
     spriteSheet = img
-    fetch('/assets/0025.json')
+    fetch('/assets/sprites/0025.json')
       .then(function(r) { return r.json() })
       .then(function(data) {
         parseSpriteData(data)
@@ -155,7 +155,7 @@ function loadSpriteSheet(callback) {
         if (callback) callback()
       })
   }
-  img.src = '/assets/0025.png'
+  img.src = '/assets/sprites/0025.png'
 }
 
 function parseSpriteData(data) {
@@ -329,7 +329,7 @@ function initInput() {
       hit.animFrame = 0
       hit.animTimer = 0
       updatePartyBar()
-      canvas.style.cursor = "url('/assets/cursor-grabbing.png') 12 12, grabbing"
+      canvas.style.cursor = "url('/assets/cursors/cursor-grabbing.png') 12 12, grabbing"
     }
   })
 
@@ -371,7 +371,7 @@ function initInput() {
       cr.animFrame = 0
       cr.animTimer = 0
       cr.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
-      canvas.style.cursor = "url('/assets/cursor-grab.png') 12 12, grab"
+      canvas.style.cursor = "url('/assets/cursors/cursor-grab.png') 12 12, grab"
     } else if (!dragState.moved && dragState.dragging) {
       var rect = canvas.getBoundingClientRect()
       handleClick(e.clientX - rect.left, e.clientY - rect.top)
