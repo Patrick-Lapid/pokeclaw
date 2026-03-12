@@ -54,15 +54,13 @@ function saveConfig(config) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config), { mode: 0o600 });
 }
 
-// ── Display name from git config ───────────────────────────────────────────
+// ── Username ──────────────────────────────────────────────────────────────
 
-function getDisplayName() {
+function getDefaultName() {
   try {
     const { execSync } = require('child_process');
-    return execSync('git config user.name', { encoding: 'utf8', timeout: 3000 }).trim()
-        || execSync('git config user.email', { encoding: 'utf8', timeout: 3000 }).trim()
-        || 'anonymous';
-  } catch (e) { return 'anonymous'; }
+    return execSync('git config user.name', { encoding: 'utf8', timeout: 3000 }).trim() || null;
+  } catch (e) { return null; }
 }
 
 // ── Uninstall hooks ─────────────────────────────────────────────────────────
@@ -108,11 +106,26 @@ async function main() {
     }
   }
 
-  // 2. Build the PartyKit ingest URL
-  const username = getDisplayName();
+  // 2. Pick username
+  const config2 = loadConfig();
+  let username;
+  if (config2.username) {
+    username = config2.username;
+  } else {
+    const defaultName = getDefaultName();
+    const hint = defaultName ? ` ${dim}[${defaultName}]${reset}` : '';
+    console.log('');
+    console.log('  What should your creature be called?');
+    console.log('');
+    const nameAnswer = await prompt(`  Username${hint}: `);
+    username = nameAnswer.trim() || defaultName || 'anonymous';
+    saveConfig({ ...loadConfig(), username });
+  }
+
+  // 3. Build the PartyKit ingest URL
   const ingestUrl = `https://${PARTYKIT_HOST}/party/${room}?username=${encodeURIComponent(username)}`;
 
-  // 3. Configure hooks to POST directly to PartyKit
+  // 4. Configure hooks to POST directly to PartyKit
   const status = checkHooks();
 
   if (status.installed && status.target === ingestUrl) {
@@ -134,7 +147,7 @@ async function main() {
     }
   }
 
-  // 4. Print status
+  // 5. Print status
   const roomPath = room === 'global' ? 'world' : `room/${room}`;
   const shareUrl = `https://${SITE_HOST}/${roomPath}`;
 
@@ -152,7 +165,7 @@ async function main() {
   console.log(`  Start a Claude Code session to spawn your first creature.`);
   console.log('');
 
-  // 5. Open browser
+  // 6. Open browser
   if (!noOpen) {
     const { execFile } = require('child_process');
     switch (process.platform) {
