@@ -1,10 +1,10 @@
 {
-  "name": "agentdex",
+  "name": "pokeclaw",
   "version": "1.0.0",
   "description": "A pokedex for your Claude Code agents",
   "main": "src/server.js",
   "bin": {
-    "agentdex": "./src/cli.js"
+    "pokeclaw": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/cli.js"

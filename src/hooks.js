@@ -1,5 +1,5 @@
-// ── Agentdex Claude Code hooks manager ──────────────────────────────────────
-// Shared module for installing, uninstalling, and checking agentdex hooks
+// ── Pokeclaw Claude Code hooks manager ──────────────────────────────────────
+// Shared module for installing, uninstalling, and checking pokeclaw hooks
 // in ~/.claude/settings.json. Idempotent — safe to call on every startup.
 
 const fs = require('fs');
@@ -8,8 +8,8 @@ const os = require('os');
 
 const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
-// Marker string used to identify agentdex hook commands
-const HOOK_MARKER = 'agentdex';
+// Marker string used to identify pokeclaw hook commands
+const HOOK_MARKER = 'pokeclaw';
 
 const HOOK_EVENTS = {
   // Events that need a wildcard matcher (fire for every tool)
@@ -42,13 +42,13 @@ function makeCommand(target) {
   return `curl -s -X POST http://127.0.0.1:${target}/hook -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
 }
 
-function isAgentdexHook(hookEntry) {
+function isPokeclawHook(hookEntry) {
   return (hookEntry.hooks || []).some(h =>
     h.command && h.command.includes(HOOK_MARKER)
   );
 }
 
-function getAgentdexTarget(hookEntry) {
+function getPokeclawTarget(hookEntry) {
   for (const h of (hookEntry.hooks || [])) {
     if (!h.command) continue;
     // Check for PartyKit URL
@@ -64,7 +64,7 @@ function getAgentdexTarget(hookEntry) {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Check if agentdex hooks are installed in settings.json.
+ * Check if pokeclaw hooks are installed in settings.json.
  * Returns { installed: boolean, port: number|null, target: string|number|null }
  */
 function checkHooks() {
@@ -76,8 +76,8 @@ function checkHooks() {
   if (!Array.isArray(entries)) return { installed: false, port: null, target: null };
 
   for (const entry of entries) {
-    if (isAgentdexHook(entry)) {
-      const target = getAgentdexTarget(entry);
+    if (isPokeclawHook(entry)) {
+      const target = getPokeclawTarget(entry);
       const port = typeof target === 'number' ? target : null;
       return { installed: true, port, target };
     }
@@ -86,7 +86,7 @@ function checkHooks() {
 }
 
 /**
- * Install or update agentdex hooks in settings.json.
+ * Install or update pokeclaw hooks in settings.json.
  * target can be a port number (localhost mode) or a URL string (hosted mode).
  * Returns 'installed' | 'updated' | 'unchanged'
  */
@@ -106,7 +106,7 @@ function installHooks(target) {
     let allPresent = true;
     for (const event of allEvents) {
       const entries = settings.hooks[event];
-      if (!Array.isArray(entries) || !entries.some(isAgentdexHook)) {
+      if (!Array.isArray(entries) || !entries.some(isPokeclawHook)) {
         allPresent = false;
         break;
       }
@@ -128,8 +128,8 @@ function installHooks(target) {
       // No entries for this event yet
       settings.hooks[event] = [newEntry];
     } else {
-      // Find and replace existing agentdex entry, or append
-      const idx = settings.hooks[event].findIndex(isAgentdexHook);
+      // Find and replace existing pokeclaw entry, or append
+      const idx = settings.hooks[event].findIndex(isPokeclawHook);
       if (idx !== -1) {
         settings.hooks[event][idx] = newEntry;
       } else {
@@ -143,7 +143,7 @@ function installHooks(target) {
 }
 
 /**
- * Remove all agentdex hooks from settings.json.
+ * Remove all pokeclaw hooks from settings.json.
  * Preserves other hooks. Returns true if any were removed.
  */
 function uninstallHooks() {
@@ -157,7 +157,7 @@ function uninstallHooks() {
     const entries = settings.hooks[event];
     if (!Array.isArray(entries)) continue;
 
-    const filtered = entries.filter(entry => !isAgentdexHook(entry));
+    const filtered = entries.filter(entry => !isPokeclawHook(entry));
     if (filtered.length !== entries.length) {
       removed = true;
       if (filtered.length === 0) {

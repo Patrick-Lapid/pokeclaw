@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>agentdex</title>
+<title>pokeclaw</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap');
 
@@ -257,6 +257,102 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
 }
+
+#info-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#info-overlay.visible { display: flex }
+
+#info-box {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  padding: 32px;
+  max-width: 520px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  text-align: center;
+}
+
+#info-box .info-logo {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 28px;
+  color: var(--accent);
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+}
+
+#info-box .info-tagline {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+}
+
+#info-box .info-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+#info-box .info-card h3 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+#info-box .info-card pre {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+#info-box .info-card p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+#info-box .info-links {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+#info-box .info-links a {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  transition: background 0.2s;
+}
+
+#info-box .info-links a:hover { background: var(--panel-alt) }
+
+#info-box .close-info {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  cursor: url('/assets/cursors/cursor-hover.png') 4 2, pointer;
+  margin-top: 20px;
+}
+
+#info-box .close-info:hover { opacity: 0.85 }
 </style>
 </head>
 <body>
@@ -265,10 +361,13 @@ body {
 
 <div id="ui-layer">
   <div id="topbar">
-    <div class="logo">AGENTDEX <span class="subtitle">a pokedex for your claude agents</span></div>
-    <div class="status">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">connecting...</span>
+    <div class="logo">POKECLAW <span class="subtitle">a pokedex for your claude agents</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button id="info-btn" style="background:none;border:1px solid var(--border);color:var(--accent);font-family:'Press Start 2P',monospace;font-size:10px;padding:4px 10px;cursor:url('/assets/cursors/cursor-hover.png') 4 2,pointer;border-radius:3px">?</button>
+      <div class="status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">connecting...</span>
+      </div>
     </div>
   </div>
   <div id="encounter-count"></div>
@@ -289,6 +388,40 @@ body {
   </div>
 </div>
 
+<div id="info-overlay">
+  <div id="info-box">
+    <div class="info-logo">POKECLAW</div>
+    <p class="info-tagline">a pokedex for your claude agents</p>
+
+    <div class="info-card">
+      <h3>GET STARTED</h3>
+      <pre>npx pokeclaw</pre>
+    </div>
+
+    <div class="info-card">
+      <h3>HOW IT WORKS</h3>
+      <p>Run pokeclaw locally. Your Claude Code agents appear as pixel creatures in a shared room. Share the room URL &mdash; anyone can watch, no install needed.</p>
+    </div>
+
+    <div class="info-links">
+      <a href="https://github.com/Patrick-Lapid/pokeclaw">GITHUB</a>
+    </div>
+
+    <button class="close-info" id="close-info">CLOSE</button>
+  </div>
+</div>
+
 <script src="/js/game.js"></script>
+<script>
+document.getElementById('info-btn').addEventListener('click', function() {
+  document.getElementById('info-overlay').classList.add('visible')
+})
+document.getElementById('close-info').addEventListener('click', function() {
+  document.getElementById('info-overlay').classList.remove('visible')
+})
+document.getElementById('info-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('visible')
+})
+</script>
 </body>
 </html>

@@ -19,7 +19,7 @@ const PARTYKIT_HOST = 'agentdex.patrick-lapid.partykit.dev';
 const SITE_HOST = 'pokeclaw.dev';
 
 if (args.includes('--help') || args.includes('-h')) {
-  console.log('Usage: agentdex [options]');
+  console.log('Usage: pokeclaw [options]');
   console.log('');
   console.log('Options:');
   console.log('  --room <name>       Set and save room (default: saved preference or prompt)');
@@ -27,7 +27,7 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  --reset             Re-prompt for room and username');
   console.log('  --dev               Use local PartyKit dev server (localhost:1999)');
   console.log('  --no-open           Do not auto-open browser');
-  console.log('  --uninstall-hooks   Remove agentdex hooks from ~/.claude/settings.json');
+  console.log('  --uninstall-hooks   Remove pokeclaw hooks from ~/.claude/settings.json');
   console.log('  --help, -h          Show this help message');
   process.exit(0);
 }
@@ -50,7 +50,7 @@ const noOpen = args.includes('--no-open');
 
 // ── Config persistence ─────────────────────────────────────────────────────
 
-const CONFIG_DIR = path.join(os.homedir(), '.agentdex');
+const CONFIG_DIR = path.join(os.homedir(), '.pokeclaw');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 function loadConfig() {
@@ -79,9 +79,9 @@ function getDefaultName() {
 if (args.includes('--uninstall-hooks')) {
   const removed = uninstallHooks();
   if (removed) {
-    console.log(`  ${green}✓${reset}  Agentdex hooks removed from ~/.claude/settings.json`);
+    console.log(`  ${green}✓${reset}  Pokeclaw hooks removed from ~/.claude/settings.json`);
   } else {
-    console.log(`  ${dim}No agentdex hooks found in ~/.claude/settings.json${reset}`);
+    console.log(`  ${dim}No pokeclaw hooks found in ~/.claude/settings.json${reset}`);
   }
   process.exit(0);
 }
@@ -154,14 +154,14 @@ async function main() {
   } else {
     console.log('');
     console.log(`  ${yellow}!${reset}  Claude Code hooks not configured.`);
-    console.log(`  ${dim}Hooks let agentdex see your agents in real time.${reset}`);
+    console.log(`  ${dim}Hooks let pokeclaw see your agents in real time.${reset}`);
     console.log('');
     const answer = (await prompt(`  Configure hooks automatically? ${dim}(Y/n)${reset} `)).toLowerCase();
     if (answer === '' || answer === 'y' || answer === 'yes') {
       installHooks(ingestUrl);
       console.log(`  ${green}✓${reset}  Hooks installed`);
     } else {
-      console.log(`  ${dim}Skipped. Run agentdex again to configure later.${reset}`);
+      console.log(`  ${dim}Skipped. Run pokeclaw again to configure later.${reset}`);
     }
   }
 

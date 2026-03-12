@@ -1,5 +1,5 @@
 {
-  "name": "agentdex",
+  "name": "pokeclaw",
   "main": "party/room.ts",
   "serve": "./public",
   "compatibilityDate": "2026-03-12"

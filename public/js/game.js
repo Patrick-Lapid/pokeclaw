@@ -1,4 +1,4 @@
-// AGENTDEX — HTML Canvas Game Engine
+// POKECLAW — HTML Canvas Game Engine
 // PMD-style sprite sheet (0025.png + 0025.json)
 // Directions: 0=down, 1=down-right, 2=right, 3=up-right, 4=up, 5=up-left, 6=left, 7=down-left
 

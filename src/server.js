@@ -21,7 +21,7 @@ let server = null;
 
 // ── XP persistence ─────────────────────────────────────────────────────────────
 
-const DATA_DIR = path.join(os.homedir(), '.agentdex');
+const DATA_DIR = path.join(os.homedir(), '.pokeclaw');
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 let saveTimer = null;
 
@@ -619,7 +619,7 @@ function startServer({ port, open }) {
     if (checkHooksConfigured()) {
       console.log(`  ${green}✓${reset} Hooks configured`);
     } else {
-      console.log(`  ${yellow}⚠${reset} Hooks not configured — restart agentdex to auto-configure`);
+      console.log(`  ${yellow}⚠${reset} Hooks not configured — restart pokeclaw to auto-configure`);
     }
 
     console.log('');
