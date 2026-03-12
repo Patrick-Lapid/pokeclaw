@@ -346,11 +346,13 @@ function initInput() {
       cr.y += dy / camera.zoom
       cr.col = Math.round((cr.x - TILE / 2) / TILE)
       cr.row = Math.round((cr.y - TILE / 2) / TILE)
+      canvas.style.cursor = "url('/assets/cursors/cursor-grabbing.png') 12 12, grabbing"
     } else {
       // Pan camera
       camera.x -= dx / camera.zoom
       camera.y -= dy / camera.zoom
       clampCamera()
+      canvas.style.cursor = "url('/assets/cursors/cursor-grabbing.png') 12 12, grabbing"
     }
 
     dragState.lastX = e.clientX
