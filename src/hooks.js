@@ -9,8 +9,7 @@ const os = require('os');
 const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
 // Marker string used to identify agentdex hook commands
-const HOOK_MARKER = '/hook';
-const HOOK_MARKER_FULL = 'agentdex';
+const HOOK_MARKER = 'agentdex';
 
 const HOOK_EVENTS = {
   // Events that need a wildcard matcher (fire for every tool)
@@ -35,21 +34,29 @@ function writeSettings(settings) {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 }
 
-function makeCommand(port) {
-  return `curl -s -X POST http://127.0.0.1:${port}/hook -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
+function makeCommand(target) {
+  // target is either a port number (localhost) or a full URL (PartyKit)
+  if (typeof target === 'string' && target.startsWith('http')) {
+    return `curl -s -X POST ${target} -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
+  }
+  return `curl -s -X POST http://127.0.0.1:${target}/hook -H 'Content-Type: application/json' --data-binary @- < /dev/stdin`;
 }
 
 function isAgentdexHook(hookEntry) {
   return (hookEntry.hooks || []).some(h =>
-    h.command && h.command.includes(HOOK_MARKER) && h.command.includes('127.0.0.1')
+    h.command && h.command.includes(HOOK_MARKER)
   );
 }
 
-function getAgentdexPort(hookEntry) {
+function getAgentdexTarget(hookEntry) {
   for (const h of (hookEntry.hooks || [])) {
     if (!h.command) continue;
-    const match = h.command.match(/127\.0\.0\.1:(\d+)\/hook/);
-    if (match) return parseInt(match[1], 10);
+    // Check for PartyKit URL
+    const urlMatch = h.command.match(/https?:\/\/[^\s]+/);
+    if (urlMatch && urlMatch[0].includes('partykit')) return urlMatch[0];
+    // Check for localhost port
+    const portMatch = h.command.match(/127\.0\.0\.1:(\d+)\/hook/);
+    if (portMatch) return parseInt(portMatch[1], 10);
   }
   return null;
 }
@@ -58,42 +65,43 @@ function getAgentdexPort(hookEntry) {
 
 /**
  * Check if agentdex hooks are installed in settings.json.
- * Returns { installed: boolean, port: number|null }
+ * Returns { installed: boolean, port: number|null, target: string|number|null }
  */
 function checkHooks() {
   const settings = readSettings();
   if (!settings.hooks || !settings.hooks.PreToolUse) {
-    return { installed: false, port: null };
+    return { installed: false, port: null, target: null };
   }
   const entries = settings.hooks.PreToolUse;
-  if (!Array.isArray(entries)) return { installed: false, port: null };
+  if (!Array.isArray(entries)) return { installed: false, port: null, target: null };
 
   for (const entry of entries) {
     if (isAgentdexHook(entry)) {
-      return { installed: true, port: getAgentdexPort(entry) };
+      const target = getAgentdexTarget(entry);
+      const port = typeof target === 'number' ? target : null;
+      return { installed: true, port, target };
     }
   }
-  return { installed: false, port: null };
+  return { installed: false, port: null, target: null };
 }
 
 /**
  * Install or update agentdex hooks in settings.json.
- * Idempotent — if hooks already exist with the correct port, no-op.
- * If hooks exist with a different port, updates them in place.
+ * target can be a port number (localhost mode) or a URL string (hosted mode).
  * Returns 'installed' | 'updated' | 'unchanged'
  */
-function installHooks(port) {
+function installHooks(target) {
   const settings = readSettings();
   if (!settings.hooks) settings.hooks = {};
 
-  const command = makeCommand(port);
+  const command = makeCommand(target);
   const hook = { type: 'command', command };
   const allEvents = [...HOOK_EVENTS.matched, ...HOOK_EVENTS.unmatched];
   let action = 'installed';
 
   // Check current state
   const current = checkHooks();
-  if (current.installed && current.port === port) {
+  if (current.installed && current.target === target) {
     // Verify all events are present
     let allPresent = true;
     for (const event of allEvents) {
@@ -106,7 +114,7 @@ function installHooks(port) {
     if (allPresent) return 'unchanged';
   }
 
-  if (current.installed && current.port !== port) {
+  if (current.installed && current.target !== target) {
     action = 'updated';
   }
 
@@ -174,8 +182,8 @@ function uninstallHooks() {
 /**
  * Generate the hooks config object for display/API purposes.
  */
-function getHooksConfig(port) {
-  const command = makeCommand(port);
+function getHooksConfig(target) {
+  const command = makeCommand(target);
   const hook = { type: 'command', command };
   const matchAll = { matcher: '', hooks: [hook] };
   const noMatcher = { hooks: [hook] };

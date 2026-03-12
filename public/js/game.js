@@ -488,6 +488,7 @@ function CreatureEntity(sessionId, species, startCol, startRow, nestRef) {
   this.bubbleTimer = 0
   this.animFrame = 0
   this.animTimer = 0
+  this.username = null
 }
 
 CreatureEntity.prototype.getAnimData = function() {
@@ -887,7 +888,8 @@ var wsReconnectTimer = null
 
 function connectWS() {
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  ws = new WebSocket(proto + '//' + location.host)
+  var room = new URLSearchParams(location.search).get('room') || 'global'
+  ws = new WebSocket(proto + '//' + location.host + '/party/' + room)
 
   ws.onopen = function() {
     document.getElementById('statusDot').className = 'status-dot connected'
@@ -918,11 +920,29 @@ function handleMsg(m) {
   var cr
 
   switch (m.type) {
+    case 'world_init':
+      if (Array.isArray(m.agents)) {
+        m.agents.forEach(function(a) {
+          cr = creatures.get(a.sessionId) || createCreature(a.sessionId, a.speciesIndex)
+          if (!cr) return
+          if (a.username) cr.username = a.username
+          cr.isActive = a.isActive
+          cr.statusText = a.status || 'idle'
+          if (typeof a.xp === 'number') cr.xp = a.xp
+          cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
+        })
+        updatePartyBar()
+      }
+      break
+
     case 'session_discovered':
       cr = createCreature(m.sessionId, m.speciesIndex)
-      if (cr && typeof m.xp === 'number' && m.xp > cr.xp) {
-        cr.xp = m.xp
-        cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
+      if (cr) {
+        if (m.username) cr.username = m.username
+        if (typeof m.xp === 'number' && m.xp > cr.xp) {
+          cr.xp = m.xp
+          cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
+        }
         updatePartyBar()
       }
       break
@@ -932,6 +952,7 @@ function handleMsg(m) {
       cancelRemovalTimer(m.sessionId)
       cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
       if (!cr) break
+      if (m.username) cr.username = m.username
       cr.isActive = true
       cr.statusText = m.status || ('Using ' + (m.toolName || 'tool'))
       if (typeof m.xp === 'number') { cr.xp = m.xp } else { cr.xp++ }
@@ -1025,6 +1046,7 @@ function handleMsg(m) {
         cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
       }
       if (!cr) break
+      if (m.username) cr.username = m.username
       cr.isActive = true
       cr.statusText = 'ready!'
       if (typeof m.xp === 'number' && m.xp > cr.xp) {
