@@ -22,7 +22,9 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('Usage: agentdex [options]');
   console.log('');
   console.log('Options:');
-  console.log('  --room <name>       Join a specific room (default: saved preference or prompt)');
+  console.log('  --room <name>       Set and save room (default: saved preference or prompt)');
+  console.log('  --username <name>   Set and save username');
+  console.log('  --reset             Re-prompt for room and username');
   console.log('  --no-open           Do not auto-open browser');
   console.log('  --uninstall-hooks   Remove agentdex hooks from ~/.claude/settings.json');
   console.log('  --help, -h          Show this help message');
@@ -35,6 +37,13 @@ if (roomIdx !== -1 && args[roomIdx + 1]) {
   room = args[roomIdx + 1].toLowerCase().replace(/[^a-z0-9-]/g, '');
 }
 
+let usernameArg = null;
+const usernameIdx = args.indexOf('--username');
+if (usernameIdx !== -1 && args[usernameIdx + 1]) {
+  usernameArg = args[usernameIdx + 1].trim();
+}
+
+const doReset = args.includes('--reset');
 const noOpen = args.includes('--no-open');
 
 // ── Config persistence ─────────────────────────────────────────────────────
@@ -91,28 +100,33 @@ function prompt(question) {
 
 async function main() {
   // 1. Select room
-  if (!room) {
-    const config = loadConfig();
-    if (config.room) {
-      room = config.room;
-    } else {
-      console.log('');
-      console.log('  Which room do you want to join?');
-      console.log('  Press Enter for the global room, or type a custom name.');
-      console.log('');
-      const answer = await prompt(`  Room name ${dim}[global]${reset}: `);
-      room = answer.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || 'global';
-      saveConfig({ ...config, room });
-    }
+  if (room) {
+    // --room flag: save it
+    saveConfig({ ...loadConfig(), room });
+  } else if (!doReset && loadConfig().room) {
+    room = loadConfig().room;
+  } else {
+    console.log('');
+    console.log('  Which room do you want to join?');
+    console.log('  Press Enter for the global room, or type a custom name.');
+    console.log('');
+    const current = loadConfig().room;
+    const hint = current ? ` ${dim}[${current}]${reset}` : ` ${dim}[global]${reset}`;
+    const answer = await prompt(`  Room name${hint}: `);
+    room = answer.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || current || 'global';
+    saveConfig({ ...loadConfig(), room });
   }
 
   // 2. Pick username
-  const config2 = loadConfig();
   let username;
-  if (config2.username) {
-    username = config2.username;
+  if (usernameArg) {
+    // --username flag: save it
+    username = usernameArg;
+    saveConfig({ ...loadConfig(), username });
+  } else if (!doReset && loadConfig().username) {
+    username = loadConfig().username;
   } else {
-    const defaultName = getDefaultName();
+    const defaultName = loadConfig().username || getDefaultName();
     const hint = defaultName ? ` ${dim}[${defaultName}]${reset}` : '';
     console.log('');
     console.log('  What should your creature be called?');
