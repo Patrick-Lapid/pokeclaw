@@ -154,7 +154,7 @@ async function main() {
   } else {
     console.log('');
     console.log(`  ${yellow}!${reset}  Claude Code hooks not configured.`);
-    console.log(`  ${dim}Hooks let pokeclaw see your agents in real time.${reset}`);
+    console.log(`  ${dim}Hooks let your pok\u00e9dex see your agents in real time.${reset}`);
     console.log('');
     const answer = (await prompt(`  Configure hooks automatically? ${dim}(Y/n)${reset} `)).toLowerCase();
     if (answer === '' || answer === 'y' || answer === 'yes') {
@@ -170,12 +170,13 @@ async function main() {
   const shareUrl = isDev ? `http://localhost:1999?room=${encodeURIComponent(room)}` : `https://${SITE_HOST}/${roomPath}`;
 
   console.log('');
-  console.log(`  ${dim}╔══════════════════════════════════════╗${reset}`);
-  console.log(`  ${dim}║${reset}                                      ${dim}║${reset}`);
-  console.log(`  ${dim}║${reset}   ${bold}${green}▓▓▓${reset} ${bold}a g e n t d e x${reset}                ${dim}║${reset}`);
-  console.log(`  ${dim}║${reset}   ${dim}A pokedex for your Claude agents${reset}   ${dim}║${reset}`);
-  console.log(`  ${dim}║${reset}                                      ${dim}║${reset}`);
-  console.log(`  ${dim}╚══════════════════════════════════════╝${reset}`);
+  console.log(`  ${yellow} ______  ______   __  __  ______  ______  __       ______  __       __${reset}`);
+  console.log(`  ${yellow}/\\  == \\/\\  __ \\ /\\ \\/ / /\\  ___\\/\\  ___\\/\\ \\     /\\  __ \\/\\ \\  _  /\\ \\${reset}`);
+  console.log(`  ${yellow}\\ \\  _-/\\ \\ \\/\\ \\\\ \\  _"-\\ \\  __\\\\ \\ \\___\\ \\ \\____\\ \\  __ \\ \\ \\/ \\/ \\ \\${reset}`);
+  console.log(`  ${yellow} \\ \\_\\   \\ \\_____\\\\ \\_\\ \\_\\\\ \\_____\\ \\_____\\ \\_____\\\\ \\_\\ \\_\\ \\__/".~\\_\\${reset}`);
+  console.log(`  ${yellow}  \\/_/    \\/_____/ \\/_/\\/_/ \\/_____/\\/_____/\\/_____/ \\/_/\\/_/\\/_/   \\/_/${reset}`);
+  console.log('');
+  console.log(`  ${dim}A pok\u00e9dex for your Claude Code agents${reset}`);
   console.log('');
   console.log(`  ${green}✓${reset}  Connected to room: ${bold}${room}${reset}`);
   console.log(`  ${green}✓${reset}  Share: ${cyan}${shareUrl}${reset}`);

@@ -1,4 +1,4 @@
-# agentdex
+# pokeclaw
 
 A Pokedex for your Claude Code agents. Watch your coding sessions come to life as pixel-art creatures on an interactive map.
 
@@ -6,7 +6,7 @@ A Pokedex for your Claude Code agents. Watch your coding sessions come to life a
 
 ## What is it?
 
-Agentdex monitors your active [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and represents each one as a unique pixel-art creature. Creatures wander around a tile-based overworld, react to tool usage in real time, and level up as your agents work.
+Pokeclaw monitors your active [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and represents each one as a unique pixel-art creature. Creatures wander around a tile-based overworld, react to tool usage in real time, and level up as your agents work.
 
 <img width="1664" height="1308" alt="image" src="https://github.com/user-attachments/assets/eaeb1b22-a872-403a-8e76-d40762a1ca18" />
 
@@ -15,7 +15,7 @@ Agentdex monitors your active [Claude Code](https://docs.anthropic.com/en/docs/c
 
 - **Real-time activity tracking** — creatures show what your agent is doing (reading, editing, searching, running commands)
 - **XP & leveling** — every tool call earns XP; creatures level up over time
-- **Persistent data** — XP and species assignments are saved across sessions in `~/.agentdex/data.json`
+- **Persistent data** — XP and species assignments are saved across sessions in `~/.pokeclaw/data.json`
 - **Interactive canvas** — pan, zoom, and click to select creatures
 - **Party bar** — quick overview of all active agents with status and level
 - **Hooks integration** — optional Claude Code hooks for instant updates (tool start/stop, notifications, subagent spawns)
@@ -24,14 +24,14 @@ Agentdex monitors your active [Claude Code](https://docs.anthropic.com/en/docs/c
 ## Install
 
 ```bash
-npm install -g agentdex
+npm install -g pokeclaw
 ```
 
 Or run directly from the repo:
 
 ```bash
-git clone https://github.com/Patrick-Lapid/agentdex.git
-cd agentdex
+git clone https://github.com/Patrick-Lapid/pokeclaw.git
+cd pokeclaw
 npm install
 npm start
 ```
@@ -39,20 +39,24 @@ npm start
 ## Usage
 
 ```bash
-agentdex [options]
+pokeclaw [options]
 ```
 
 | Option | Description |
 |---|---|
-| `--port <number>` | Port to listen on (default: `3000`) |
+| `--room <name>` | Set and save room name (default: saved preference or prompt) |
+| `--username <name>` | Set and save username for your creature |
+| `--reset` | Re-prompt for room and username |
+| `--dev` | Use local PartyKit dev server (localhost:1999) |
 | `--no-open` | Don't auto-open the browser |
+| `--uninstall-hooks` | Remove pokeclaw hooks from `~/.claude/settings.json` |
 | `--help`, `-h` | Show help |
 
-Once running, open `http://127.0.0.1:3000` in your browser.
+Once running, open the shared URL printed in the terminal to view your creatures.
 
 ## Hooks Setup (Optional)
 
-For real-time creature reactions, add Claude Code hooks to `~/.claude/settings.json`. Agentdex will show you the config to copy when hooks aren't detected, or you can grab it from the `/api/hooks-config` endpoint.
+For real-time creature reactions, pokeclaw can automatically configure Claude Code hooks in `~/.claude/settings.json`. On first run, it will prompt you to install them.
 
 Hooks enable instant updates for:
 - Tool start/stop events
@@ -60,15 +64,21 @@ Hooks enable instant updates for:
 - Idle prompts (creature shows `?` bubble)
 - Subagent spawn/stop (new creatures appear and disappear)
 
-Without hooks, agentdex still works by tailing session JSONL files — updates are just slightly delayed.
+Without hooks, pokeclaw still works by tailing session JSONL files — updates are just slightly delayed.
+
+To remove hooks later, run:
+
+```bash
+pokeclaw --uninstall-hooks
+```
 
 ## How It Works
 
-1. A local HTTP + WebSocket server starts on `127.0.0.1`
-2. The server scans `~/.claude/projects/` for `.jsonl` session transcripts modified in the last 24 hours
-3. New lines are parsed for tool usage, turn boundaries, and progress events
-4. Updates are broadcast over WebSocket to the browser client
-5. The browser renders an interactive pixel-art overworld with creatures mapped to sessions
+1. When you run `pokeclaw`, it configures Claude Code hooks to POST events to a shared PartyKit server
+2. Each Claude Code session is represented as a unique creature in a shared room
+3. Tool usage, turn boundaries, and progress events are broadcast in real time
+4. The browser renders an interactive pixel-art overworld with creatures mapped to sessions
+5. Config (room, username) is persisted in `~/.pokeclaw/config.json`
 
 ## License
 

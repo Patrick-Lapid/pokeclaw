@@ -600,15 +600,15 @@ function startServer({ port, open }) {
     const green = '\x1b[32m';
     const yellow = '\x1b[33m';
     const cyan = '\x1b[36m';
-    const red = '\x1b[31m';
 
     console.log('');
-    console.log(`  ${dim}╔══════════════════════════════════════╗${reset}`);
-    console.log(`  ${dim}║${reset}                                      ${dim}║${reset}`);
-    console.log(`  ${dim}║${reset}   ${bold}${green}▓▓▓${reset} ${bold}a g e n t d e x${reset}                ${dim}║${reset}`);
-    console.log(`  ${dim}║${reset}   ${dim}A pokedex for your Claude agents${reset}   ${dim}║${reset}`);
-    console.log(`  ${dim}║${reset}                                      ${dim}║${reset}`);
-    console.log(`  ${dim}╚══════════════════════════════════════╝${reset}`);
+    console.log(`  ${yellow} ______  ______   __  __  ______  ______  __       ______  __       __${reset}`);
+    console.log(`  ${yellow}/\\  == \\/\\  __ \\ /\\ \\/ / /\\  ___\\/\\  ___\\/\\ \\     /\\  __ \\/\\ \\  _  /\\ \\${reset}`);
+    console.log(`  ${yellow}\\ \\  _-/\\ \\ \\/\\ \\\\ \\  _"-\\ \\  __\\\\ \\ \\___\\ \\ \\____\\ \\  __ \\ \\ \\/ \\/ \\ \\${reset}`);
+    console.log(`  ${yellow} \\ \\_\\   \\ \\_____\\\\ \\_\\ \\_\\\\ \\_____\\ \\_____\\ \\_____\\\\ \\_\\ \\_\\ \\__/".~\\_\\${reset}`);
+    console.log(`  ${yellow}  \\/_/    \\/_____/ \\/_/\\/_/ \\/_____/\\/_____/\\/_____/ \\/_/\\/_/\\/_/   \\/_/${reset}`);
+    console.log('');
+    console.log(`  ${dim}A pok\u00e9dex for your Claude Code agents${reset}`);
     console.log('');
     console.log(`  ${green}●${reset} Server    ${cyan}http://127.0.0.1:${port}${reset}`);
     console.log(`  ${green}●${reset} Sessions  ${bold}${knownSessions.size}${reset} discovered`);
