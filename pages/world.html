@@ -250,8 +250,8 @@ function connectWS() {
   var parts = location.pathname.split('/')
   var room  = parts[1] === 'room' ? (parts[2] || 'global') : 'global'
 
-  // Use PartySocket if available, otherwise fall back to raw WebSocket
-  var url = 'wss://agentdex.patrick-lapid.partykit.dev/party/' + room
+  var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  var url = wsProto + '//' + location.host + '/party/' + room
   ws = new WebSocket(url)
 
   ws.onopen = function() {

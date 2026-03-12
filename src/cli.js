@@ -25,6 +25,7 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  --room <name>       Set and save room (default: saved preference or prompt)');
   console.log('  --username <name>   Set and save username');
   console.log('  --reset             Re-prompt for room and username');
+  console.log('  --dev               Use local PartyKit dev server (localhost:1999)');
   console.log('  --no-open           Do not auto-open browser');
   console.log('  --uninstall-hooks   Remove agentdex hooks from ~/.claude/settings.json');
   console.log('  --help, -h          Show this help message');
@@ -44,6 +45,7 @@ if (usernameIdx !== -1 && args[usernameIdx + 1]) {
 }
 
 const doReset = args.includes('--reset');
+const isDev = args.includes('--dev');
 const noOpen = args.includes('--no-open');
 
 // ── Config persistence ─────────────────────────────────────────────────────
@@ -137,7 +139,9 @@ async function main() {
   }
 
   // 3. Build the PartyKit ingest URL
-  const ingestUrl = `https://${PARTYKIT_HOST}/party/${room}?username=${encodeURIComponent(username)}`;
+  const host = isDev ? 'localhost:1999' : PARTYKIT_HOST;
+  const proto = isDev ? 'http' : 'https';
+  const ingestUrl = `${proto}://${host}/party/${room}?username=${encodeURIComponent(username)}`;
 
   // 4. Configure hooks to POST directly to PartyKit
   const status = checkHooks();
@@ -163,7 +167,7 @@ async function main() {
 
   // 5. Print status
   const roomPath = room === 'global' ? 'world' : `room/${room}`;
-  const shareUrl = `https://${SITE_HOST}/${roomPath}`;
+  const shareUrl = isDev ? `http://localhost:1999?room=${encodeURIComponent(room)}` : `https://${SITE_HOST}/${roomPath}`;
 
   console.log('');
   console.log(`  ${dim}╔══════════════════════════════════════╗${reset}`);
