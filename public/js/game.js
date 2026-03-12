@@ -223,22 +223,25 @@ var camera = { x: 0, y: 0, zoom: 0, minZoom: 1, maxZoom: 6 }
 var MAP_W = COLS * TILE
 var MAP_H = ROWS * TILE
 
+function viewW() { return canvas.width / (window.devicePixelRatio || 1) }
+function viewH() { return canvas.height / (window.devicePixelRatio || 1) }
+
 function clampCamera() {
   // Compute minimum zoom so at most 70% of the map is visible
-  var fitZoom = Math.max(canvas.width / MAP_W, canvas.height / MAP_H) / 0.7
+  var fitZoom = Math.max(viewW() / MAP_W, viewH() / MAP_H) / 0.7
   camera.minZoom = fitZoom
   if (camera.zoom < camera.minZoom) camera.zoom = camera.minZoom
 
   // Clamp pan so no area outside the map is visible
-  var halfViewW = (canvas.width / 2) / camera.zoom
-  var halfViewH = (canvas.height / 2) / camera.zoom
+  var halfViewW = (viewW() / 2) / camera.zoom
+  var halfViewH = (viewH() / 2) / camera.zoom
   camera.x = Math.max(halfViewW, Math.min(MAP_W - halfViewW, camera.x))
   camera.y = Math.max(halfViewH, Math.min(MAP_H - halfViewH, camera.y))
 }
 
 function worldToScreen(wx, wy) {
-  var cx = canvas.width / 2
-  var cy = canvas.height / 2
+  var cx = viewW() / 2
+  var cy = viewH() / 2
   return {
     x: (wx - camera.x) * camera.zoom + cx,
     y: (wy - camera.y) * camera.zoom + cy
@@ -246,8 +249,8 @@ function worldToScreen(wx, wy) {
 }
 
 function screenToWorld(sx, sy) {
-  var cx = canvas.width / 2
-  var cy = canvas.height / 2
+  var cx = viewW() / 2
+  var cy = viewH() / 2
   return {
     x: (sx - cx) / camera.zoom + camera.x,
     y: (sy - cy) / camera.zoom + camera.y
@@ -263,8 +266,7 @@ var lastTime = 0
 function initCanvas() {
   var container = document.getElementById('game-container')
   canvas = document.createElement('canvas')
-  canvas.style.imageRendering = 'pixelated'
-  canvas.style.imageRendering = 'crisp-edges'
+  canvas.style.imageRendering = 'auto'
   container.appendChild(canvas)
   ctx = canvas.getContext('2d')
 
@@ -281,9 +283,12 @@ function initCanvas() {
 
 function resizeCanvas() {
   var container = document.getElementById('game-container')
-  canvas.width = container.clientWidth
-  canvas.height = container.clientHeight
-  ctx.imageSmoothingEnabled = false
+  var dpr = window.devicePixelRatio || 1
+  canvas.width = container.clientWidth * dpr
+  canvas.height = container.clientHeight * dpr
+  canvas.style.width = container.clientWidth + 'px'
+  canvas.style.height = container.clientHeight + 'px'
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   clampCamera()
   drawStaticTerrain()
 }
@@ -755,10 +760,11 @@ CreatureEntity.prototype.draw = function(ctx) {
 // Render Loop
 
 function render() {
-  ctx.imageSmoothingEnabled = false
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.imageSmoothingEnabled = camera.zoom < 1
+  ctx.imageSmoothingQuality = 'high'
+  ctx.clearRect(0, 0, viewW(), viewH())
   ctx.fillStyle = '#0f1f0a'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillRect(0, 0, viewW(), viewH())
 
   var topLeft = worldToScreen(0, 0)
   ctx.drawImage(terrainCanvas, topLeft.x, topLeft.y, COLS * TILE * camera.zoom, ROWS * TILE * camera.zoom)
