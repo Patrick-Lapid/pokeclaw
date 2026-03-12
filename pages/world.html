@@ -245,8 +245,8 @@ for (var nr = 0; nr < 5; nr++) {
 // ── Override connectWS to use PartyKit ──────────────────────────────────────
 function connectWS() {
   // Parse room from URL:
-  // agentdex.gg/world        → room = 'global'
-  // agentdex.gg/room/myteam  → room = 'myteam'
+  // pokeclaw.dev/world        → room = 'global'
+  // pokeclaw.dev/room/myteam  → room = 'myteam'
   var parts = location.pathname.split('/')
   var room  = parts[1] === 'room' ? (parts[2] || 'global') : 'global'
 

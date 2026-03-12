@@ -16,7 +16,7 @@ const green = '\x1b[32m';
 const cyan = '\x1b[36m';
 
 const PARTYKIT_HOST = 'agentdex.patrick-lapid.partykit.dev';
-const SITE_HOST = 'agentdex.gg';
+const SITE_HOST = 'pokeclaw.dev';
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log('Usage: agentdex [options]');
