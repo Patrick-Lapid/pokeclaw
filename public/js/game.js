@@ -706,6 +706,20 @@ CreatureEntity.prototype.draw = function(ctx) {
   var lvFontSize = Math.max(5, Math.round(6 * camera.zoom / 3))
   var spriteTop = screen.y - 16 * scale
 
+  // Username label
+  if (this.username && this.username !== 'anonymous') {
+    var baseFontSize = 24
+    var textScale = lvFontSize / baseFontSize
+    ctx.save()
+    ctx.translate(screen.x, spriteTop - lvFontSize - 2)
+    ctx.scale(textScale, textScale)
+    ctx.font = baseFontSize + 'px "Press Start 2P", monospace'
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#fff'
+    ctx.fillText('@' + this.username, 0, 0)
+    ctx.restore()
+  }
+
   if (this.isActive && this.state === 'work' && this.statusText) {
     ctx.font = lvFontSize + 'px Silkscreen, monospace'
     ctx.textAlign = 'center'
