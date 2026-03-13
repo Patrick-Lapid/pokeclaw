@@ -15,8 +15,7 @@ const yellow = '\x1b[33m';
 const green = '\x1b[32m';
 const cyan = '\x1b[36m';
 
-const PARTYKIT_HOST = 'agentdex.patrick-lapid.partykit.dev';
-const SITE_HOST = 'pokeclaw.dev';
+const WORKER_HOST = 'pokeclaw.dev';
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log('Usage: pokeclaw [options]');
@@ -25,7 +24,7 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  --room <name>       Set and save room (default: saved preference or prompt)');
   console.log('  --username <name>   Set and save username');
   console.log('  --reset             Re-prompt for room and username');
-  console.log('  --dev               Use local PartyKit dev server (localhost:1999)');
+  console.log('  --dev               Use local wrangler dev server (localhost:8787)');
   console.log('  --no-open           Do not auto-open browser');
   console.log('  --uninstall-hooks   Remove pokeclaw hooks from ~/.claude/settings.json');
   console.log('  --help, -h          Show this help message');
@@ -138,12 +137,12 @@ async function main() {
     saveConfig({ ...loadConfig(), username });
   }
 
-  // 3. Build the PartyKit ingest URL
-  const host = isDev ? 'localhost:1999' : PARTYKIT_HOST;
+  // 3. Build the ingest URL
+  const host = isDev ? 'localhost:8787' : WORKER_HOST;
   const proto = isDev ? 'http' : 'https';
-  const ingestUrl = `${proto}://${host}/party/${room}?username=${encodeURIComponent(username)}`;
+  const ingestUrl = `${proto}://${host}/parties/AgentRoom/${room}?username=${encodeURIComponent(username)}`;
 
-  // 4. Configure hooks to POST directly to PartyKit
+  // 4. Configure hooks
   const status = checkHooks();
 
   if (status.installed && status.target === ingestUrl) {
@@ -167,7 +166,7 @@ async function main() {
 
   // 5. Print status
   const roomPath = room === 'global' ? 'world' : `room/${room}`;
-  const shareUrl = isDev ? `http://localhost:1999?room=${encodeURIComponent(room)}` : `https://${SITE_HOST}/${roomPath}`;
+  const shareUrl = isDev ? `http://localhost:8787?room=${encodeURIComponent(room)}` : `https://${WORKER_HOST}/${roomPath}`;
 
   console.log('');
   console.log(`  ${yellow} ______  ______   __  __  ______  ______  __       ______  __       __${reset}`);

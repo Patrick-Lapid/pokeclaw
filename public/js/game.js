@@ -911,7 +911,7 @@ var wsReconnectTimer = null
 function connectWS() {
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   var room = new URLSearchParams(location.search).get('room') || 'global'
-  ws = new WebSocket(proto + '//' + location.host + '/party/' + room)
+  ws = new WebSocket(proto + '//' + location.host + '/parties/AgentRoom/' + room)
 
   ws.onopen = function() {
     document.getElementById('statusDot').className = 'status-dot connected'

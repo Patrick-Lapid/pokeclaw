@@ -1,0 +1,22 @@
+{
+  "name": "pokeclaw",
+  "main": "party/room.ts",
+  "compatibility_date": "2026-03-12",
+  "assets": {
+    "directory": "./public"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AgentRoom",
+        "class_name": "AgentRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AgentRoom"]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-import type * as Party from "partykit/server";
+import { Server, routePartykitRequest } from "partyserver";
+import type { Connection, ConnectionContext } from "partyserver";
 
 interface AgentState {
   sessionId:    string;
@@ -35,7 +36,7 @@ function toolStatus(toolName: string, toolInput: Record<string, unknown> | undef
   }
 }
 
-export default class AgentRoom implements Party.Server {
+export class AgentRoom extends Server {
   agents = new Map<string, AgentState>();
   sessionXp = new Map<string, number>();
   speciesCounter = 0;
@@ -43,8 +44,6 @@ export default class AgentRoom implements Party.Server {
   sessionLastSeen = new Map<string, number>();
   endedSessions = new Set<string>();
   recentlyCleared = new Map<string, { timestamp: number; speciesIndex: number; xp: number }>();
-
-  constructor(readonly party: Party.Party) {}
 
   getSpeciesIndex(sessionId: string): number {
     if (this.sessionSpecies.has(sessionId)) return this.sessionSpecies.get(sessionId)!;
@@ -59,24 +58,24 @@ export default class AgentRoom implements Party.Server {
     return current + 1;
   }
 
-  onConnect(conn: Party.Connection) {
+  onConnect(conn: Connection, ctx: ConnectionContext) {
     conn.send(JSON.stringify({
       type:   'world_init',
       agents: [...this.agents.values()]
     }));
   }
 
-  onMessage(raw: string, sender: Party.Connection) {
+  onMessage(conn: Connection, raw: string) {
     let msg: Record<string, unknown>;
     try { msg = JSON.parse(raw); } catch { return; }
 
     this.applyEvent(msg);
-    this.party.broadcast(raw, [sender.id]);
+    this.broadcast(raw, [conn.id]);
   }
 
   // ── HTTP ingest endpoint for Claude Code hooks ────────────────────────────
 
-  async onRequest(req: Party.Request): Promise<Response> {
+  async onRequest(req: Request): Promise<Response> {
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -108,7 +107,7 @@ export default class AgentRoom implements Party.Server {
 
     // Broadcast all generated events to connected browsers
     for (const event of events) {
-      this.party.broadcast(JSON.stringify(event));
+      this.broadcast(JSON.stringify(event));
     }
 
     return new Response(JSON.stringify({ ok: true }), {
@@ -312,3 +311,16 @@ export default class AgentRoom implements Party.Server {
     }
   }
 }
+
+interface Env {
+  AgentRoom: DurableObjectNamespace;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return (
+      (await routePartykitRequest(request, env)) ||
+      new Response("Not Found", { status: 404 })
+    );
+  },
+} satisfies ExportedHandler<Env>;

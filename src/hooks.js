@@ -51,9 +51,9 @@ function isPokeclawHook(hookEntry) {
 function getPokeclawTarget(hookEntry) {
   for (const h of (hookEntry.hooks || [])) {
     if (!h.command) continue;
-    // Check for PartyKit URL
+    // Check for remote URL (pokeclaw.dev or partykit)
     const urlMatch = h.command.match(/https?:\/\/[^\s]+/);
-    if (urlMatch && urlMatch[0].includes('partykit')) return urlMatch[0];
+    if (urlMatch && (urlMatch[0].includes('pokeclaw') || urlMatch[0].includes('partykit'))) return urlMatch[0];
     // Check for localhost port
     const portMatch = h.command.match(/127\.0\.0\.1:(\d+)\/hook/);
     if (portMatch) return parseInt(portMatch[1], 10);
