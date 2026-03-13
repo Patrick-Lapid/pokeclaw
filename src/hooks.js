@@ -43,9 +43,16 @@ function makeCommand(target) {
 }
 
 function isPokeclawHook(hookEntry) {
-  return (hookEntry.hooks || []).some(h =>
-    h.command && h.command.includes(HOOK_MARKER)
-  );
+  return (hookEntry.hooks || []).some(h => {
+    if (!h.command) return false;
+    // Match current "pokeclaw" marker, legacy "agentdex"/"partykit" URLs,
+    // and legacy localhost party/world endpoints
+    return h.command.includes(HOOK_MARKER)
+      || h.command.includes('agentdex')
+      || h.command.includes('partykit')
+      || /localhost:\d+\/part(y|ies\/world)\//.test(h.command)
+      || /127\.0\.0\.1:\d+\/part(y|ies\/world)\//.test(h.command);
+  });
 }
 
 function getPokeclawTarget(hookEntry) {
