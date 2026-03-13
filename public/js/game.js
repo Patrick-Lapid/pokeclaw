@@ -293,25 +293,57 @@ function resizeCanvas() {
   drawStaticTerrain()
 }
 
-// Input
+// Spatial grid for fast hit testing
 
-var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0, target: null }
+var spatialGrid = {}
+var GRID_CELL = TILE * 2 // each cell covers 2x2 tiles
+
+function spatialKey(col, row) { return col + ',' + row }
+
+function spatialGridCell(wx, wy) {
+  return { c: Math.floor(wx / GRID_CELL), r: Math.floor(wy / GRID_CELL) }
+}
+
+function rebuildSpatialGrid() {
+  spatialGrid = {}
+  pokemon.forEach(function(cr) {
+    var cell = spatialGridCell(cr.x, cr.y)
+    var key = spatialKey(cell.c, cell.r)
+    if (!spatialGrid[key]) spatialGrid[key] = []
+    spatialGrid[key].push(cr)
+  })
+}
 
 function hitTestPokemon(sx, sy) {
   var world = screenToWorld(sx, sy)
+  var cell = spatialGridCell(world.x, world.y)
   var hit = null
   var minDist = TILE * 0.75
-  pokemon.forEach(function(cr) {
-    var dx = world.x - cr.x
-    var dy = world.y - cr.y
-    var dist = Math.sqrt(dx * dx + dy * dy)
-    if (dist < minDist) {
-      minDist = dist
-      hit = cr
+  var minDistSq = minDist * minDist
+  // Check the cell and its 8 neighbors
+  for (var dr = -1; dr <= 1; dr++) {
+    for (var dc = -1; dc <= 1; dc++) {
+      var key = spatialKey(cell.c + dc, cell.r + dr)
+      var bucket = spatialGrid[key]
+      if (!bucket) continue
+      for (var i = 0; i < bucket.length; i++) {
+        var cr = bucket[i]
+        var dx = world.x - cr.x
+        var dy = world.y - cr.y
+        var distSq = dx * dx + dy * dy
+        if (distSq < minDistSq) {
+          minDistSq = distSq
+          hit = cr
+        }
+      }
     }
-  })
+  }
   return hit
 }
+
+// Input
+
+var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0, target: null }
 
 function initInput() {
   canvas.addEventListener('pointerdown', function(e) {
@@ -325,6 +357,7 @@ function initInput() {
     dragState.lastX = e.clientX
     dragState.lastY = e.clientY
     dragState.target = hit
+    hideHoverCard()
 
     if (hit) {
       selectedId = hit.id
@@ -386,6 +419,35 @@ function initInput() {
     canvas.style.cursor = "url('/assets/cursors/cursor-grab.png') 12 12, grab"
     dragState.dragging = false
     dragState.target = null
+  })
+
+  var lastHoverTime = 0
+  var HOVER_THROTTLE = 50 // ms between hover hit tests
+  canvas.addEventListener('pointermove', function(e) {
+    lastMouseX = e.clientX
+    lastMouseY = e.clientY
+    if (dragState.dragging) { hideHoverCard(); return }
+    // Always reposition if card is visible (cheap — no DOM read)
+    if (hoverCardVisible) positionHoverCard(e.clientX, e.clientY)
+    // Throttle hit testing
+    var now = performance.now()
+    if (now - lastHoverTime < HOVER_THROTTLE) return
+    lastHoverTime = now
+    var rect = canvas.getBoundingClientRect()
+    var sx = e.clientX - rect.left
+    var sy = e.clientY - rect.top
+    var hit = hitTestPokemon(sx, sy)
+    if (hit) {
+      if (hoveredPokemonId !== hit.id) {
+        showHoverCard(hit, e.clientX, e.clientY)
+      }
+    } else {
+      hideHoverCard()
+    }
+  })
+
+  canvas.addEventListener('pointerleave', function() {
+    hideHoverCard()
   })
 
   canvas.addEventListener('wheel', function(e) {
@@ -709,7 +771,7 @@ PokemonEntity.prototype.draw = function(ctx) {
     ctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, drawX, drawY, drawW, drawH)
   }
 
-  var lvFontSize = Math.max(5, Math.round(6 * camera.zoom / 3))
+  var lvFontSize = Math.max(6, Math.round(8 * camera.zoom / 3))
   var spriteTop = screen.y - 16 * scale
 
   // Username label
@@ -781,7 +843,9 @@ function gameLoop(timestamp) {
   if (dt > 200) dt = 200
   lastTime = timestamp
   pokemon.forEach(function(cr) { cr.update(dt) })
+  rebuildSpatialGrid()
   render()
+  updateHoverCard()
   requestAnimationFrame(gameLoop)
 }
 
@@ -841,6 +905,102 @@ function randRange(min, max) {
 
 function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1))
+}
+
+// Hover Card
+
+var hoverCardEl = null
+var hoveredPokemonId = null
+var hoverCardVisible = false
+var lastMouseX = 0
+var lastMouseY = 0
+
+function initHoverCard() {
+  hoverCardEl = document.getElementById('hover-card')
+}
+
+function showHoverCard(cr, screenX, screenY) {
+  if (!hoverCardEl || !cr) return
+  hoveredPokemonId = cr.id
+  hoverCardVisible = true
+
+  var typeColor = TYPE_COLORS[cr.species.type] || '#fff'
+  var displayName = (cr.username && cr.username !== 'anonymous') ? '@' + cr.username : 'anonymous'
+  var activeClass = cr.isActive ? 'active' : 'inactive'
+
+  hoverCardEl.innerHTML =
+    '<div class="hc-box">' +
+      '<div class="hc-row">' +
+        '<img class="hc-portrait" src="/assets/portraits/0025.png" alt="' + cr.species.name + '">' +
+        '<div class="hc-info">' +
+          '<div class="hc-username">' + displayName + '</div>' +
+          '<div class="hc-species" style="color:' + typeColor + '">' + cr.species.name + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hc-divider"></div>' +
+      '<div class="hc-status ' + activeClass + '">' +
+        '<span class="hc-status-indicator ' + activeClass + '"></span>' +
+        '<span>' + (cr.statusText || 'idle') + '</span>' +
+      '</div>' +
+    '</div>'
+
+  hoverCardEl.classList.add('visible')
+  cacheHoverCardSize()
+  positionHoverCard(screenX, screenY)
+}
+
+var hoverCardCachedW = 200
+var hoverCardCachedH = 160
+
+function cacheHoverCardSize() {
+  if (!hoverCardEl) return
+  var w = hoverCardEl.offsetWidth
+  var h = hoverCardEl.offsetHeight
+  if (w > 0) hoverCardCachedW = w
+  if (h > 0) hoverCardCachedH = h
+}
+
+function positionHoverCard(screenX, screenY) {
+  if (!hoverCardEl) return
+  // Scale offsets with zoom so the card stays clear of the sprite at any zoom level
+  var zoomScale = Math.max(1, camera.zoom)
+  var offsetX = 16 + 10 * zoomScale
+  var offsetY = 8 + 12 * zoomScale
+  var vw = window.innerWidth
+  var vh = window.innerHeight
+
+  var x = screenX + offsetX
+  var y = screenY - offsetY - hoverCardCachedH
+
+  // Flip left if overflows right
+  if (x + hoverCardCachedW > vw - 8) x = screenX - offsetX - hoverCardCachedW
+  if (x < 8) x = 8
+
+  // Push down if overflows top
+  if (y < 48) y = screenY + 24
+  // Push up if overflows bottom
+  if (y + hoverCardCachedH > vh - 8) y = vh - 8 - hoverCardCachedH
+
+  hoverCardEl.style.left = x + 'px'
+  hoverCardEl.style.top = y + 'px'
+}
+
+function hideHoverCard() {
+  if (!hoverCardEl) return
+  hoverCardEl.classList.remove('visible')
+  hoveredPokemonId = null
+  hoverCardVisible = false
+}
+
+function updateHoverCard() {
+  if (!hoverCardVisible || !hoveredPokemonId) return
+  if (!pokemon.has(hoveredPokemonId)) { hideHoverCard(); return }
+  // Re-check if the pokemon is still under the cursor (it may have walked away)
+  var rect = canvas.getBoundingClientRect()
+  var sx = lastMouseX - rect.left
+  var sy = lastMouseY - rect.top
+  var hit = hitTestPokemon(sx, sy)
+  if (!hit || hit.id !== hoveredPokemonId) hideHoverCard()
 }
 
 // DOM UI
@@ -1100,6 +1260,7 @@ function handleMsg(m) {
 initTileData()
 initCanvas()
 initInput()
+initHoverCard()
 
 setTimeout(function() {
   fetch('/api/status')
