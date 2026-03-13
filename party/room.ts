@@ -36,7 +36,7 @@ function toolStatus(toolName: string, toolInput: Record<string, unknown> | undef
   }
 }
 
-export class AgentRoom extends Server {
+export class World extends Server {
   agents = new Map<string, AgentState>();
   sessionXp = new Map<string, number>();
   speciesCounter = 0;
@@ -313,7 +313,7 @@ export class AgentRoom extends Server {
 }
 
 interface Env {
-  AgentRoom: DurableObjectNamespace;
+  world: DurableObjectNamespace;
 }
 
 export default {

@@ -8,8 +8,8 @@
   "durable_objects": {
     "bindings": [
       {
-        "name": "AgentRoom",
-        "class_name": "AgentRoom"
+        "name": "world",
+        "class_name": "World"
       }
     ]
   },
@@ -17,6 +17,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["AgentRoom"]
+    },
+    {
+      "tag": "v2",
+      "renamed_classes": [{ "from": "AgentRoom", "to": "World" }]
     }
   ]
 }

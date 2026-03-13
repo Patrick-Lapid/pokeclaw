@@ -21,9 +21,9 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('Usage: pokeclaw [options]');
   console.log('');
   console.log('Options:');
-  console.log('  --room <name>       Set and save room (default: saved preference or prompt)');
+  console.log('  --world <name>      Set and save world (default: saved preference or prompt)');
   console.log('  --username <name>   Set and save username');
-  console.log('  --reset             Re-prompt for room and username');
+  console.log('  --reset             Re-prompt for world and username');
   console.log('  --dev               Use local wrangler dev server (localhost:8787)');
   console.log('  --no-open           Do not auto-open browser');
   console.log('  --uninstall-hooks   Remove pokeclaw hooks from ~/.claude/settings.json');
@@ -31,10 +31,10 @@ if (args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-let room = null;
-const roomIdx = args.indexOf('--room');
-if (roomIdx !== -1 && args[roomIdx + 1]) {
-  room = args[roomIdx + 1].toLowerCase().replace(/[^a-z0-9-]/g, '');
+let world = null;
+const worldIdx = args.indexOf('--world');
+if (worldIdx !== -1 && args[worldIdx + 1]) {
+  world = args[worldIdx + 1].toLowerCase().replace(/[^a-z0-9-]/g, '');
 }
 
 let usernameArg = null;
@@ -100,22 +100,22 @@ function prompt(question) {
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // 1. Select room
-  if (room) {
-    // --room flag: save it
-    saveConfig({ ...loadConfig(), room });
-  } else if (!doReset && loadConfig().room) {
-    room = loadConfig().room;
+  // 1. Select world
+  if (world) {
+    // --world flag: save it
+    saveConfig({ ...loadConfig(), world });
+  } else if (!doReset && loadConfig().world) {
+    world = loadConfig().world;
   } else {
     console.log('');
-    console.log('  Which room do you want to join?');
-    console.log('  Press Enter for the global room, or type a custom name.');
+    console.log('  Which world do you want to join?');
+    console.log('  Press Enter for the global world, or type a custom name.');
     console.log('');
-    const current = loadConfig().room;
+    const current = loadConfig().world;
     const hint = current ? ` ${dim}[${current}]${reset}` : ` ${dim}[global]${reset}`;
-    const answer = await prompt(`  Room name${hint}: `);
-    room = answer.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || current || 'global';
-    saveConfig({ ...loadConfig(), room });
+    const answer = await prompt(`  World name${hint}: `);
+    world = answer.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || current || 'global';
+    saveConfig({ ...loadConfig(), world });
   }
 
   // 2. Pick username
@@ -140,7 +140,7 @@ async function main() {
   // 3. Build the ingest URL
   const host = isDev ? 'localhost:8787' : WORKER_HOST;
   const proto = isDev ? 'http' : 'https';
-  const ingestUrl = `${proto}://${host}/parties/AgentRoom/${room}?username=${encodeURIComponent(username)}`;
+  const ingestUrl = `${proto}://${host}/parties/world/${world}?username=${encodeURIComponent(username)}`;
 
   // 4. Configure hooks
   const status = checkHooks();
@@ -149,7 +149,7 @@ async function main() {
     // Already configured correctly
   } else if (status.installed) {
     installHooks(ingestUrl);
-    console.log(`  ${green}✓${reset}  Hooks updated to point at room: ${room}`);
+    console.log(`  ${green}✓${reset}  Hooks updated to point at world: ${world}`);
   } else {
     console.log('');
     console.log(`  ${yellow}!${reset}  Claude Code hooks not configured.`);
@@ -165,8 +165,8 @@ async function main() {
   }
 
   // 5. Print status
-  const roomPath = room === 'global' ? 'world' : `room/${room}`;
-  const shareUrl = isDev ? `http://localhost:8787?room=${encodeURIComponent(room)}` : `https://${WORKER_HOST}/${roomPath}`;
+  const worldPath = world === 'global' ? 'world' : `world/${world}`;
+  const shareUrl = isDev ? `http://localhost:8787?world=${encodeURIComponent(world)}` : `https://${WORKER_HOST}/${worldPath}`;
 
   console.log('');
   console.log(`  ${yellow} ______  ______   __  __  ______  ______  __       ______  __       __${reset}`);
@@ -177,7 +177,7 @@ async function main() {
   console.log('');
   console.log(`  ${dim}A pok\u00e9dex for your Claude Code agents${reset}`);
   console.log('');
-  console.log(`  ${green}✓${reset}  Connected to room: ${bold}${room}${reset}`);
+  console.log(`  ${green}✓${reset}  Connected to world: ${bold}${world}${reset}`);
   console.log(`  ${green}✓${reset}  Share: ${cyan}${shareUrl}${reset}`);
   console.log('');
   console.log(`  Start a Claude Code session to spawn your first creature.`);
