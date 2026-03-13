@@ -297,11 +297,11 @@ function resizeCanvas() {
 
 var dragState = { dragging: false, moved: false, lastX: 0, lastY: 0, target: null }
 
-function hitTestCreature(sx, sy) {
+function hitTestPokemon(sx, sy) {
   var world = screenToWorld(sx, sy)
   var hit = null
   var minDist = TILE * 0.75
-  creatures.forEach(function(cr) {
+  pokemon.forEach(function(cr) {
     var dx = world.x - cr.x
     var dy = world.y - cr.y
     var dist = Math.sqrt(dx * dx + dy * dy)
@@ -318,7 +318,7 @@ function initInput() {
     var rect = canvas.getBoundingClientRect()
     var sx = e.clientX - rect.left
     var sy = e.clientY - rect.top
-    var hit = hitTestCreature(sx, sy)
+    var hit = hitTestPokemon(sx, sy)
 
     dragState.dragging = true
     dragState.moved = false
@@ -345,7 +345,7 @@ function initInput() {
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragState.moved = true
 
     if (dragState.target) {
-      // Drag creature
+      // Drag pokemon
       var cr = dragState.target
       cr.x += dx / camera.zoom
       cr.y += dy / camera.zoom
@@ -366,7 +366,7 @@ function initInput() {
 
   window.addEventListener('pointerup', function(e) {
     if (dragState.target) {
-      // Snap creature to grid on drop
+      // Snap pokemon to grid on drop
       var cr = dragState.target
       cr.col = Math.max(BOARD_COL_MIN, Math.min(BOARD_COL_MAX, Math.round((cr.x - TILE / 2) / TILE)))
       cr.row = Math.max(BOARD_ROW_MIN, Math.min(BOARD_ROW_MAX, Math.round((cr.y - TILE / 2) / TILE)))
@@ -383,6 +383,7 @@ function initInput() {
       var rect = canvas.getBoundingClientRect()
       handleClick(e.clientX - rect.left, e.clientY - rect.top)
     }
+    canvas.style.cursor = "url('/assets/cursors/cursor-grab.png') 12 12, grab"
     dragState.dragging = false
     dragState.target = null
   })
@@ -409,7 +410,7 @@ function handleClick(sx, sy) {
   var hit = null
   var minDist = TILE * 0.75
 
-  creatures.forEach(function(cr) {
+  pokemon.forEach(function(cr) {
     var dx = world.x - cr.x
     var dy = world.y - cr.y
     var dist = Math.sqrt(dx * dx + dy * dy)
@@ -466,14 +467,14 @@ function drawStaticTerrain() {
   }
 }
 
-// Creature Entity
+// Pokemon Entity
 
-var creatures = new Map()
+var pokemon = new Map()
 var removalTimers = new Map()
 var endedSessions = new Set()
 var selectedId = null
 
-function CreatureEntity(sessionId, species, startCol, startRow, nestRef) {
+function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.id = sessionId
   this.species = species
   this.nest = nestRef
@@ -498,17 +499,17 @@ function CreatureEntity(sessionId, species, startCol, startRow, nestRef) {
   this.username = null
 }
 
-CreatureEntity.prototype.getAnimData = function() {
+PokemonEntity.prototype.getAnimData = function() {
   return getSpriteFrames(this.state, this.dir)
 }
 
-CreatureEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
+PokemonEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
   if (!durations || durations.length === 0) return 200
   var ticks = durations[frameIndex % durations.length] || 1
   return ticks * (1000 / FPS_POKEMON_ANIMS)
 }
 
-CreatureEntity.prototype.update = function(dt) {
+PokemonEntity.prototype.update = function(dt) {
   if (dragState.target === this) return
   // Per-frame duration animation
   var data = this.getAnimData()
@@ -611,14 +612,14 @@ CreatureEntity.prototype.update = function(dt) {
   }
 }
 
-CreatureEntity.prototype.finishWalk = function() {
+PokemonEntity.prototype.finishWalk = function() {
   this.state = 'idle'
   this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
   this.animFrame = 0
   this.animTimer = 0
 }
 
-CreatureEntity.prototype.draw = function(ctx) {
+PokemonEntity.prototype.draw = function(ctx) {
   if (!spriteReady) return
 
   var data = this.getAnimData()
@@ -655,12 +656,12 @@ CreatureEntity.prototype.draw = function(ctx) {
 
   if (this.id === selectedId) {
     var typeColor = TYPE_COLORS[this.species.type] || '#ffffff'
-    if (!CreatureEntity._selCanvas) {
-      CreatureEntity._selCanvas = document.createElement('canvas')
-      CreatureEntity._selCtx = CreatureEntity._selCanvas.getContext('2d')
+    if (!PokemonEntity._selCanvas) {
+      PokemonEntity._selCanvas = document.createElement('canvas')
+      PokemonEntity._selCtx = PokemonEntity._selCanvas.getContext('2d')
     }
-    var sc2 = CreatureEntity._selCanvas
-    var sctx = CreatureEntity._selCtx
+    var sc2 = PokemonEntity._selCanvas
+    var sctx = PokemonEntity._selCtx
     var pw = Math.ceil(frame.w) + 4
     var ph = Math.ceil(frame.h) + 4
     sc2.width = pw
@@ -670,12 +671,12 @@ CreatureEntity.prototype.draw = function(ctx) {
 
     // Outline: draw the sprite offset in 4 directions, then composite the color
     sctx.globalCompositeOperation = 'source-over'
-    if (!CreatureEntity._outlineCanvas) {
-      CreatureEntity._outlineCanvas = document.createElement('canvas')
-      CreatureEntity._outlineCtx = CreatureEntity._outlineCanvas.getContext('2d')
+    if (!PokemonEntity._outlineCanvas) {
+      PokemonEntity._outlineCanvas = document.createElement('canvas')
+      PokemonEntity._outlineCtx = PokemonEntity._outlineCanvas.getContext('2d')
     }
-    var outlineCanvas = CreatureEntity._outlineCanvas
-    var octx = CreatureEntity._outlineCtx
+    var outlineCanvas = PokemonEntity._outlineCanvas
+    var octx = PokemonEntity._outlineCtx
     outlineCanvas.width = pw
     outlineCanvas.height = ph
     var offsets = [[-1,0],[1,0],[0,-1],[0,1]]
@@ -770,7 +771,7 @@ function render() {
   ctx.drawImage(terrainCanvas, topLeft.x, topLeft.y, COLS * TILE * camera.zoom, ROWS * TILE * camera.zoom)
 
   var sorted = []
-  creatures.forEach(function(cr) { sorted.push(cr) })
+  pokemon.forEach(function(cr) { sorted.push(cr) })
   sorted.sort(function(a, b) { return a.y - b.y })
   for (var i = 0; i < sorted.length; i++) sorted[i].draw(ctx)
 }
@@ -779,15 +780,15 @@ function gameLoop(timestamp) {
   var dt = timestamp - lastTime
   if (dt > 200) dt = 200
   lastTime = timestamp
-  creatures.forEach(function(cr) { cr.update(dt) })
+  pokemon.forEach(function(cr) { cr.update(dt) })
   render()
   requestAnimationFrame(gameLoop)
 }
 
-// Creature Management
+// Pokemon Management
 
-function createCreature(sessionId, speciesIndex) {
-  if (creatures.has(sessionId)) return creatures.get(sessionId)
+function createPokemon(sessionId, speciesIndex) {
+  if (pokemon.has(sessionId)) return pokemon.get(sessionId)
 
   var idx = (typeof speciesIndex === 'number') ? speciesIndex : 0
   var sp = SPECIES[idx % SPECIES.length]
@@ -801,19 +802,19 @@ function createCreature(sessionId, speciesIndex) {
     }
   }
 
-  var cr = new CreatureEntity(sessionId, sp, nest ? nest.col : 25, nest ? nest.row : 16, nest)
-  creatures.set(sessionId, cr)
+  var cr = new PokemonEntity(sessionId, sp, nest ? nest.col : 25, nest ? nest.row : 16, nest)
+  pokemon.set(sessionId, cr)
   updatePartyBar()
   updateEncounterCount()
   return cr
 }
 
-function removeCreature(sessionId) {
-  var cr = creatures.get(sessionId)
+function removePokemon(sessionId) {
+  var cr = pokemon.get(sessionId)
   if (!cr) return
   cancelRemovalTimer(sessionId)
   if (cr.nest) cr.nest.assigned = false
-  creatures.delete(sessionId)
+  pokemon.delete(sessionId)
   if (selectedId === sessionId) selectedId = null
   updatePartyBar()
   updateEncounterCount()
@@ -823,7 +824,7 @@ function scheduleRemoval(sessionId) {
   cancelRemovalTimer(sessionId)
   removalTimers.set(sessionId, setTimeout(function() {
     removalTimers.delete(sessionId)
-    removeCreature(sessionId)
+    removePokemon(sessionId)
   }, REMOVAL_DELAY))
 }
 
@@ -848,7 +849,7 @@ function updatePartyBar() {
   var bar = document.getElementById('party-bar')
   bar.innerHTML = ''
 
-  creatures.forEach(function(cr) {
+  pokemon.forEach(function(cr) {
     var div = document.createElement('div')
     div.className = 'party-member' + (cr.id === selectedId ? ' selected' : '')
     div.onclick = function() {
@@ -900,7 +901,7 @@ function updatePartyBar() {
 }
 
 function updateEncounterCount() {
-  document.getElementById('encounter-count').textContent = 'WILD ' + creatures.size + ' FOUND'
+  document.getElementById('encounter-count').textContent = 'WILD ' + pokemon.size + ' FOUND'
 }
 
 // WebSocket
@@ -945,7 +946,7 @@ function handleMsg(m) {
     case 'world_init':
       if (Array.isArray(m.agents)) {
         m.agents.forEach(function(a) {
-          cr = creatures.get(a.sessionId) || createCreature(a.sessionId, a.speciesIndex)
+          cr = pokemon.get(a.sessionId) || createPokemon(a.sessionId, a.speciesIndex)
           if (!cr) return
           if (a.username) cr.username = a.username
           cr.isActive = a.isActive
@@ -958,7 +959,7 @@ function handleMsg(m) {
       break
 
     case 'session_discovered':
-      cr = createCreature(m.sessionId, m.speciesIndex)
+      cr = createPokemon(m.sessionId, m.speciesIndex)
       if (cr) {
         if (m.username) cr.username = m.username
         if (typeof m.xp === 'number' && m.xp > cr.xp) {
@@ -972,7 +973,7 @@ function handleMsg(m) {
     case 'tool_start':
     case 'hook_tool_start':
       cancelRemovalTimer(m.sessionId)
-      cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
+      cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId, m.speciesIndex)
       if (!cr) break
       if (m.username) cr.username = m.username
       cr.isActive = true
@@ -984,7 +985,7 @@ function handleMsg(m) {
 
     case 'tool_done':
     case 'hook_tool_done':
-      cr = creatures.get(m.sessionId)
+      cr = pokemon.get(m.sessionId)
       if (cr) {
         cr.statusText = 'thinking\u2026'
         updatePartyBar()
@@ -993,7 +994,7 @@ function handleMsg(m) {
 
     case 'agent_active':
       cancelRemovalTimer(m.sessionId)
-      cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
+      cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId)
       if (!cr) break
       if (!cr.isActive) cr.statusText = 'alert!'
       cr.isActive = true
@@ -1003,7 +1004,7 @@ function handleMsg(m) {
     case 'new_turn':
     case 'hook_new_turn':
       cancelRemovalTimer(m.sessionId)
-      cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
+      cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId)
       if (!cr) break
       cr.isActive = true
       cr.statusText = 'ready!'
@@ -1014,7 +1015,7 @@ function handleMsg(m) {
 
     case 'turn_end':
     case 'hook_stop':
-      cr = creatures.get(m.sessionId)
+      cr = pokemon.get(m.sessionId)
       if (cr) {
         cr.isActive = false
         cr.statusText = 'idle'
@@ -1027,7 +1028,7 @@ function handleMsg(m) {
 
     case 'hook_notification':
       cancelRemovalTimer(m.sessionId)
-      cr = creatures.get(m.sessionId) || createCreature(m.sessionId)
+      cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId)
       if (!cr) break
       if (m.notificationType === 'permission_prompt') {
         cr.bubbleType = 'alert'
@@ -1043,7 +1044,7 @@ function handleMsg(m) {
 
     case 'hook_subagent_start':
       var subId = m.sessionId + ':' + m.agentId
-      cr = createCreature(subId)
+      cr = createPokemon(subId)
       if (cr) {
         cr.statusText = 'summoned!'
         updatePartyBar()
@@ -1052,20 +1053,20 @@ function handleMsg(m) {
 
     case 'hook_subagent_stop':
       var subId2 = m.sessionId + ':' + m.agentId
-      removeCreature(subId2)
+      removePokemon(subId2)
       break
 
     case 'hook_session_start':
       endedSessions.delete(m.sessionId)
       cancelRemovalTimer(m.sessionId)
-      if (m.replacesSessionId && creatures.has(m.replacesSessionId)) {
-        cr = creatures.get(m.replacesSessionId)
-        creatures.delete(m.replacesSessionId)
+      if (m.replacesSessionId && pokemon.has(m.replacesSessionId)) {
+        cr = pokemon.get(m.replacesSessionId)
+        pokemon.delete(m.replacesSessionId)
         cr.id = m.sessionId
-        creatures.set(m.sessionId, cr)
+        pokemon.set(m.sessionId, cr)
         if (selectedId === m.replacesSessionId) selectedId = m.sessionId
       } else {
-        cr = creatures.get(m.sessionId) || createCreature(m.sessionId, m.speciesIndex)
+        cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId, m.speciesIndex)
       }
       if (!cr) break
       if (m.username) cr.username = m.username
@@ -1079,7 +1080,7 @@ function handleMsg(m) {
       break
 
     case 'hook_session_clear':
-      cr = creatures.get(m.sessionId)
+      cr = pokemon.get(m.sessionId)
       if (cr) {
         cr.isActive = false
         cr.statusText = 'clearing\u2026'
@@ -1089,7 +1090,7 @@ function handleMsg(m) {
 
     case 'hook_session_end':
       endedSessions.add(m.sessionId)
-      removeCreature(m.sessionId)
+      removePokemon(m.sessionId)
       break
   }
 }

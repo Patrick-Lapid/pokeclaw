@@ -130,7 +130,7 @@ async function main() {
     const defaultName = loadConfig().username || getDefaultName();
     const hint = defaultName ? ` ${dim}[${defaultName}]${reset}` : '';
     console.log('');
-    console.log('  What should your creature be called?');
+    console.log('  What should your pokemon\'s usernames be?');
     console.log('');
     const nameAnswer = await prompt(`  Username${hint}: `);
     username = nameAnswer.trim() || defaultName || 'anonymous';
@@ -180,7 +180,7 @@ async function main() {
   console.log(`  ${green}✓${reset}  Connected to world: ${bold}${world}${reset}`);
   console.log(`  ${green}✓${reset}  Share: ${cyan}${shareUrl}${reset}`);
   console.log('');
-  console.log(`  Start a Claude Code session to spawn your first creature.`);
+  console.log(`  Start a Claude Code session to spawn your first pokemon.`);
   console.log('');
 
   // 6. Open browser

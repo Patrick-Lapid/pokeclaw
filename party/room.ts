@@ -212,7 +212,7 @@ export class World extends Server {
           }
         }
 
-        // Handle /clear creature transfer
+        // Handle /clear pokemon transfer
         let replacesSessionId: string | null = null;
         for (const [oldId, info] of this.recentlyCleared) {
           if (Date.now() - info.timestamp > 10000) {

@@ -420,7 +420,7 @@ function handleHook(body) {
         }
       }
 
-      // Check if this follows a /clear — transfer the old creature to this new session
+      // Check if this follows a /clear — transfer the old pokemon to this new session
       let replacesSessionId = null;
       for (const [oldId, info] of recentlyCleared) {
         // Clean up stale entries (older than 10s)
@@ -443,7 +443,7 @@ function handleHook(body) {
     case 'SessionEnd': {
       const reason = data.reason || '';
       // /clear triggers SessionEnd followed by SessionStart with a NEW session ID.
-      // Store the old session so we can transfer the creature to the new session.
+      // Store the old session so we can transfer the pokemon to the new session.
       if (reason === 'clear') {
         recentlyCleared.set(sessionId, {
           timestamp: Date.now(),
