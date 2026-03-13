@@ -4,8 +4,6 @@ import type { Connection, ConnectionContext } from "partyserver";
 interface AgentState {
   sessionId:    string;
   speciesIndex: number;
-  xp:           number;
-  level:        number;
   status:       string;
   isActive:     boolean;
   username:     string;
@@ -38,24 +36,17 @@ function toolStatus(toolName: string, toolInput: Record<string, unknown> | undef
 
 export class World extends Server {
   agents = new Map<string, AgentState>();
-  sessionXp = new Map<string, number>();
   speciesCounter = 0;
   sessionSpecies = new Map<string, number>();
   sessionLastSeen = new Map<string, number>();
   endedSessions = new Set<string>();
-  recentlyCleared = new Map<string, { timestamp: number; speciesIndex: number; xp: number }>();
+  recentlyCleared = new Map<string, { timestamp: number; speciesIndex: number }>();
 
   getSpeciesIndex(sessionId: string): number {
     if (this.sessionSpecies.has(sessionId)) return this.sessionSpecies.get(sessionId)!;
     const idx = this.speciesCounter++;
     this.sessionSpecies.set(sessionId, idx);
     return idx;
-  }
-
-  addXp(sessionId: string): number {
-    const current = this.sessionXp.get(sessionId) || 0;
-    this.sessionXp.set(sessionId, current + 1);
-    return current + 1;
   }
 
   onConnect(conn: Connection, ctx: ConnectionContext) {
@@ -135,11 +126,9 @@ export class World extends Server {
     // Discover session if new
     if (!this.agents.has(sessionId) && hookName !== 'SessionEnd') {
       const speciesIndex = this.getSpeciesIndex(sessionId);
-      const xp = this.sessionXp.get(sessionId) || 0;
       const discoveryEvent = {
         type: 'session_discovered',
         sessionId,
-        xp,
         speciesIndex,
         username,
       };
@@ -151,8 +140,7 @@ export class World extends Server {
       case 'PreToolUse': {
         const toolName = (data.tool_name as string) || 'unknown';
         const status = toolStatus(toolName, data.tool_input as Record<string, unknown>);
-        const xp = this.addXp(sessionId);
-        const event = { type: 'hook_tool_start', sessionId, toolName, status, xp, username };
+        const event = { type: 'hook_tool_start', sessionId, toolName, status, username };
         events.push(event);
         this.applyEvent(event);
         break;
@@ -222,7 +210,6 @@ export class World extends Server {
           }
           replacesSessionId = oldId;
           if (typeof info.speciesIndex === 'number') this.sessionSpecies.set(sessionId, info.speciesIndex);
-          if (info.xp > 0) this.sessionXp.set(sessionId, info.xp);
           this.recentlyCleared.delete(oldId);
           break;
         }
@@ -231,7 +218,6 @@ export class World extends Server {
           type: 'hook_session_start',
           sessionId,
           replacesSessionId,
-          xp: this.sessionXp.get(sessionId) || 0,
           speciesIndex: this.getSpeciesIndex(sessionId),
           username,
         };
@@ -245,7 +231,6 @@ export class World extends Server {
           this.recentlyCleared.set(sessionId, {
             timestamp: Date.now(),
             speciesIndex: this.sessionSpecies.get(sessionId) || 0,
-            xp: this.sessionXp.get(sessionId) || 0,
           });
           this.endedSessions.add(sessionId);
           events.push({ type: 'hook_session_clear', sessionId });
@@ -274,8 +259,6 @@ export class World extends Server {
           this.agents.set(sessionId, {
             sessionId,
             speciesIndex: msg.speciesIndex as number ?? this.agents.size,
-            xp:           msg.xp as number ?? 0,
-            level:        1,
             status:       'ready!',
             isActive:     true,
             username:     msg.username as string ?? 'anonymous',
@@ -293,8 +276,6 @@ export class World extends Server {
         const agent = this.agents.get(sessionId);
         if (agent) {
           agent.status   = msg.status as string ?? 'working';
-          agent.xp       = msg.xp as number ?? agent.xp;
-          agent.level    = Math.min(100, 1 + Math.floor(agent.xp / 5));
           agent.isActive = true;
         }
         break;

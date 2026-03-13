@@ -12,20 +12,19 @@ const knownSessions = new Set();
 const endedSessions = new Set(); // sessions that have ended (SessionEnd received)
 const sessionLastSeen = new Map(); // sessionId → timestamp of last hook event
 const sessionTranscripts = new Map(); // sessionId → transcript file path
-const sessionXp = new Map(); // sessionId → number
 const sessionSpecies = new Map(); // sessionId → species index
-const recentlyCleared = new Map(); // sessionId → { timestamp, speciesIndex, xp }
+const recentlyCleared = new Map(); // sessionId → { timestamp, speciesIndex }
 let speciesCounter = 0;
 let wss = null;
 let server = null;
 
-// ── XP persistence ─────────────────────────────────────────────────────────────
+// ── Species persistence ─────────────────────────────────────────────────────────
 
 const DATA_DIR = path.join(os.homedir(), '.pokeclaw');
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 let saveTimer = null;
 
-const MAX_XP_ENTRIES = 10000;
+const MAX_ENTRIES = 10000;
 
 function loadSessionData() {
   try {
@@ -34,17 +33,10 @@ function loadSessionData() {
     if (!stat.isFile()) return;
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     const data = JSON.parse(raw);
-    let count = 0;
-    if (data && typeof data.xp === 'object') {
-      for (const [id, xp] of Object.entries(data.xp)) {
-        if (count >= MAX_XP_ENTRIES) break;
-        if (typeof xp === 'number' && xp > 0) { sessionXp.set(id, xp); count++; }
-      }
-    }
     if (data && typeof data.species === 'object') {
       let sCount = 0;
       for (const [id, idx] of Object.entries(data.species)) {
-        if (sCount >= MAX_XP_ENTRIES) break;
+        if (sCount >= MAX_ENTRIES) break;
         if (typeof idx === 'number' && idx >= 0) { sessionSpecies.set(id, idx); sCount++; }
       }
     }
@@ -57,7 +49,6 @@ function saveSessionData() {
   saveTimer = setTimeout(() => {
     saveTimer = null;
     const data = {
-      xp: Object.fromEntries(sessionXp),
       species: Object.fromEntries(sessionSpecies),
       speciesCounter
     };
@@ -76,13 +67,6 @@ function getSpeciesIndex(sessionId) {
   sessionSpecies.set(sessionId, idx);
   saveSessionData();
   return idx;
-}
-
-function addXp(sessionId) {
-  const current = sessionXp.get(sessionId) || 0;
-  sessionXp.set(sessionId, current + 1);
-  saveSessionData();
-  return current + 1;
 }
 
 // ── Tool → status mapping ──────────────────────────────────────────────────────
@@ -134,7 +118,7 @@ function processLine(line, sessionId) {
 
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
-    broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+    broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
   }
 
   if (obj.type === 'assistant' && obj.message && Array.isArray(obj.message.content)) {
@@ -143,14 +127,12 @@ function processLine(line, sessionId) {
       if (block.type === 'tool_use') {
         hasToolUse = true;
         const status = toolStatus(block.name, block.input);
-        const xp = addXp(sessionId);
         broadcast({
           type: 'tool_start',
           sessionId,
           toolId: block.id || '',
           toolName: block.name || 'unknown',
-          status,
-          xp
+          status
         });
       }
     }
@@ -254,7 +236,7 @@ function watchFile(filePath, { announce = false } = {}) {
     const sessionId = extractSessionId(filePath);
     if (!knownSessions.has(sessionId)) {
       knownSessions.add(sessionId);
-      broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+      broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
     }
     console.log(`  ◈ Watching ${path.basename(filePath)}`);
   }
@@ -330,7 +312,7 @@ function handleHook(body) {
 
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
-    broadcast({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+    broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
   }
 
   // Auto-watch transcript if provided (restrict to ~/.claude/projects/)
@@ -349,13 +331,11 @@ function handleHook(body) {
     case 'PreToolUse': {
       const toolName = data.tool_name || 'unknown';
       const status = toolStatus(toolName, data.tool_input);
-      const xp = addXp(sessionId);
       broadcast({
         type: 'hook_tool_start',
         sessionId,
         toolName,
-        status,
-        xp
+        status
       });
       break;
     }
@@ -429,15 +409,14 @@ function handleHook(body) {
           continue;
         }
         replacesSessionId = oldId;
-        // Transfer species and XP to new session
+        // Transfer species to new session
         if (typeof info.speciesIndex === 'number') sessionSpecies.set(sessionId, info.speciesIndex);
-        if (info.xp > 0) sessionXp.set(sessionId, info.xp);
         recentlyCleared.delete(oldId);
         saveSessionData();
         break;
       }
 
-      broadcast({ type: 'hook_session_start', sessionId, replacesSessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) });
+      broadcast({ type: 'hook_session_start', sessionId, replacesSessionId, speciesIndex: getSpeciesIndex(sessionId) });
       break;
     }
     case 'SessionEnd': {
@@ -447,8 +426,7 @@ function handleHook(body) {
       if (reason === 'clear') {
         recentlyCleared.set(sessionId, {
           timestamp: Date.now(),
-          speciesIndex: sessionSpecies.get(sessionId),
-          xp: sessionXp.get(sessionId) || 0
+          speciesIndex: sessionSpecies.get(sessionId)
         });
         endedSessions.add(sessionId);
         broadcast({ type: 'hook_session_clear', sessionId });
@@ -586,7 +564,7 @@ function startServer({ port, open }) {
         if (!lastSeen || lastSeen < staleCutoff) continue;
       }
       try {
-        ws.send(JSON.stringify({ type: 'session_discovered', sessionId, xp: sessionXp.get(sessionId) || 0, speciesIndex: getSpeciesIndex(sessionId) }));
+        ws.send(JSON.stringify({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) }));
       } catch (e) {}
     }
   });
@@ -646,7 +624,6 @@ function startServer({ port, open }) {
     // Flush session data to disk immediately
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     const data = {
-      xp: Object.fromEntries(sessionXp),
       species: Object.fromEntries(sessionSpecies),
       speciesCounter
     };

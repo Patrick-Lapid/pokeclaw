@@ -549,8 +549,6 @@ function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.moveProgress = 0
   this.isActive = true
   this.statusText = 'ready!'
-  this.xp = 0
-  this.level = 1
   this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
   this.performTimer = 0
   this.bubbleType = null
@@ -1074,8 +1072,6 @@ function handleMsg(m) {
           if (a.username) cr.username = a.username
           cr.isActive = a.isActive
           cr.statusText = a.status || 'idle'
-          if (typeof a.xp === 'number') cr.xp = a.xp
-          cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
         })
   
       }
@@ -1085,11 +1081,6 @@ function handleMsg(m) {
       cr = createPokemon(m.sessionId, m.speciesIndex)
       if (cr) {
         if (m.username) cr.username = m.username
-        if (typeof m.xp === 'number' && m.xp > cr.xp) {
-          cr.xp = m.xp
-          cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
-        }
-  
       }
       break
 
@@ -1101,8 +1092,6 @@ function handleMsg(m) {
       if (m.username) cr.username = m.username
       cr.isActive = true
       cr.statusText = m.status || ('Using ' + (m.toolName || 'tool'))
-      if (typeof m.xp === 'number') { cr.xp = m.xp } else { cr.xp++ }
-      cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
 
       break
 
@@ -1196,11 +1185,6 @@ function handleMsg(m) {
       if (m.username) cr.username = m.username
       cr.isActive = true
       cr.statusText = 'ready!'
-      if (typeof m.xp === 'number' && m.xp > cr.xp) {
-        cr.xp = m.xp
-        cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
-      }
-
       break
 
     case 'hook_session_clear':
