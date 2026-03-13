@@ -195,7 +195,8 @@ export class World extends Server {
         break;
       }
       case 'UserPromptSubmit': {
-        events.push({ type: 'hook_new_turn', sessionId });
+        const prompt = (data.prompt as string) || '';
+        events.push({ type: 'hook_new_turn', sessionId, prompt });
         break;
       }
       case 'SessionStart': {
