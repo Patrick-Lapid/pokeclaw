@@ -366,7 +366,7 @@ function initInput() {
       hit.moveProgress = 0
       hit.animFrame = 0
       hit.animTimer = 0
-      updatePartyBar()
+
       canvas.style.cursor = "url('/assets/cursors/cursor-grabbing.png') 12 12, grabbing"
     }
   })
@@ -484,7 +484,6 @@ function handleClick(sx, sy) {
 
   if (selectedId !== hit) {
     selectedId = hit
-    updatePartyBar()
   }
 }
 
@@ -559,6 +558,7 @@ function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.animFrame = 0
   this.animTimer = 0
   this.username = null
+  this.prompt = null
 }
 
 PokemonEntity.prototype.getAnimData = function() {
@@ -868,7 +868,6 @@ function createPokemon(sessionId, speciesIndex) {
 
   var cr = new PokemonEntity(sessionId, sp, nest ? nest.col : 25, nest ? nest.row : 16, nest)
   pokemon.set(sessionId, cr)
-  updatePartyBar()
   updateEncounterCount()
   return cr
 }
@@ -880,7 +879,6 @@ function removePokemon(sessionId) {
   if (cr.nest) cr.nest.assigned = false
   pokemon.delete(sessionId)
   if (selectedId === sessionId) selectedId = null
-  updatePartyBar()
   updateEncounterCount()
 }
 
@@ -907,6 +905,17 @@ function randInt(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1))
 }
 
+// HTML escaping
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // Hover Card
 
 var hoverCardEl = null
@@ -925,23 +934,32 @@ function showHoverCard(cr, screenX, screenY) {
   hoverCardVisible = true
 
   var typeColor = TYPE_COLORS[cr.species.type] || '#fff'
-  var displayName = (cr.username && cr.username !== 'anonymous') ? '@' + cr.username : 'anonymous'
+  var safeName = escapeHtml((cr.username && cr.username !== 'anonymous') ? '@' + cr.username : 'anonymous')
+  var safeSpecies = escapeHtml(cr.species.name)
+  var safeStatus = escapeHtml(cr.statusText || 'idle')
   var activeClass = cr.isActive ? 'active' : 'inactive'
+
+  var promptHtml = ''
+  if (cr.prompt) {
+    var truncated = cr.prompt.length > 80 ? cr.prompt.slice(0, 80) + '\u2026' : cr.prompt
+    promptHtml = '<div class="hc-prompt">' + escapeHtml(truncated) + '</div>'
+  }
 
   hoverCardEl.innerHTML =
     '<div class="hc-box">' +
       '<div class="hc-row">' +
-        '<img class="hc-portrait" src="/assets/portraits/0025.png" alt="' + cr.species.name + '">' +
+        '<img class="hc-portrait" src="/assets/portraits/0025.png" alt="' + safeSpecies + '">' +
         '<div class="hc-info">' +
-          '<div class="hc-username">' + displayName + '</div>' +
-          '<div class="hc-species" style="color:' + typeColor + '">' + cr.species.name + '</div>' +
+          '<div class="hc-username">' + safeName + '</div>' +
+          '<div class="hc-species" style="color:' + typeColor + '">' + safeSpecies + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="hc-divider"></div>' +
       '<div class="hc-status ' + activeClass + '">' +
         '<span class="hc-status-indicator ' + activeClass + '"></span>' +
-        '<span>' + (cr.statusText || 'idle') + '</span>' +
+        '<span>' + safeStatus + '</span>' +
       '</div>' +
+      promptHtml +
     '</div>'
 
   hoverCardEl.classList.add('visible')
@@ -1005,61 +1023,6 @@ function updateHoverCard() {
 
 // DOM UI
 
-function updatePartyBar() {
-  var bar = document.getElementById('party-bar')
-  bar.innerHTML = ''
-
-  pokemon.forEach(function(cr) {
-    var div = document.createElement('div')
-    div.className = 'party-member' + (cr.id === selectedId ? ' selected' : '')
-    div.onclick = function() {
-      selectedId = cr.id
-      camera.x = cr.x
-      camera.y = cr.y
-      clampCamera()
-      updatePartyBar()
-    }
-
-    var portrait = document.createElement('img')
-    portrait.className = 'party-portrait'
-    portrait.src = '/assets/portraits/0025.png'
-    portrait.alt = cr.species.name
-    div.appendChild(portrait)
-
-    var info = document.createElement('div')
-    info.className = 'party-info'
-
-    var name = document.createElement('div')
-    name.className = 'party-name'
-    name.style.color = TYPE_COLORS[cr.species.type] || '#fff'
-    name.textContent = cr.species.name
-    info.appendChild(name)
-
-    var level = document.createElement('div')
-    level.className = 'party-level'
-    level.textContent = 'Lv' + cr.level
-    info.appendChild(level)
-
-    var hpWrap = document.createElement('div')
-    hpWrap.className = 'party-hp'
-    var hpFill = document.createElement('div')
-    hpFill.className = 'party-hp-fill'
-    var hpPct = cr.isActive ? (75 + Math.random() * 25) : (30 + Math.random() * 25)
-    hpFill.style.width = hpPct + '%'
-    hpFill.style.background = hpPct > 50 ? 'var(--hp-green)' : hpPct > 25 ? 'var(--hp-yellow)' : 'var(--hp-red)'
-    hpWrap.appendChild(hpFill)
-    info.appendChild(hpWrap)
-
-    var status = document.createElement('div')
-    status.className = 'party-status'
-    status.textContent = cr.statusText || ''
-    info.appendChild(status)
-
-    div.appendChild(info)
-    bar.appendChild(div)
-  })
-}
-
 function updateEncounterCount() {
   document.getElementById('encounter-count').textContent = 'WILD ' + pokemon.size + ' FOUND'
 }
@@ -1114,7 +1077,7 @@ function handleMsg(m) {
           if (typeof a.xp === 'number') cr.xp = a.xp
           cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
         })
-        updatePartyBar()
+  
       }
       break
 
@@ -1126,7 +1089,7 @@ function handleMsg(m) {
           cr.xp = m.xp
           cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
         }
-        updatePartyBar()
+  
       }
       break
 
@@ -1140,7 +1103,7 @@ function handleMsg(m) {
       cr.statusText = m.status || ('Using ' + (m.toolName || 'tool'))
       if (typeof m.xp === 'number') { cr.xp = m.xp } else { cr.xp++ }
       cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
-      updatePartyBar()
+
       break
 
     case 'tool_done':
@@ -1148,7 +1111,7 @@ function handleMsg(m) {
       cr = pokemon.get(m.sessionId)
       if (cr) {
         cr.statusText = 'thinking\u2026'
-        updatePartyBar()
+  
       }
       break
 
@@ -1158,7 +1121,7 @@ function handleMsg(m) {
       if (!cr) break
       if (!cr.isActive) cr.statusText = 'alert!'
       cr.isActive = true
-      updatePartyBar()
+
       break
 
     case 'new_turn':
@@ -1168,9 +1131,10 @@ function handleMsg(m) {
       if (!cr) break
       cr.isActive = true
       cr.statusText = 'ready!'
+      if (m.prompt) cr.prompt = m.prompt
       cr.bubbleType = null
       cr.bubbleTimer = 0
-      updatePartyBar()
+
       break
 
     case 'turn_end':
@@ -1182,7 +1146,7 @@ function handleMsg(m) {
         cr.state = 'idle'
         cr.animFrame = 0
         cr.animTimer = 0
-        updatePartyBar()
+  
       }
       break
 
@@ -1199,7 +1163,7 @@ function handleMsg(m) {
         cr.bubbleTimer = 5000
         cr.statusText = 'waiting\u2026'
       }
-      updatePartyBar()
+
       break
 
     case 'hook_subagent_start':
@@ -1207,7 +1171,7 @@ function handleMsg(m) {
       cr = createPokemon(subId)
       if (cr) {
         cr.statusText = 'summoned!'
-        updatePartyBar()
+  
       }
       break
 
@@ -1236,7 +1200,7 @@ function handleMsg(m) {
         cr.xp = m.xp
         cr.level = Math.min(100, 1 + Math.floor(cr.xp / 5))
       }
-      updatePartyBar()
+
       break
 
     case 'hook_session_clear':
@@ -1244,7 +1208,7 @@ function handleMsg(m) {
       if (cr) {
         cr.isActive = false
         cr.statusText = 'clearing\u2026'
-        updatePartyBar()
+  
       }
       break
 
