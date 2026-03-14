@@ -1,17 +1,14 @@
 // POKECLAW — HTML Canvas Game Engine
-// PMD-style sprite sheet (0025.png + 0025.json)
+// PMD-style per-action sprite sheets (per species)
 // Directions: 0=down, 1=down-right, 2=right, 3=up-right, 4=up, 5=up-left, 6=left, 7=down-left
 
 var TILE = 24
 var COLS = 50
 var ROWS = 32
 
-// Walkable board area (matching PAC's board position in the town map)
-var BOARD_COL_MIN = 13
-var BOARD_COL_MAX = 28
-var BOARD_ROW_MIN = 3
-var BOARD_ROW_MAX = 14
-var WALK_SPEED = 50
+var collisionGrid = null // populated from town.json collision layer
+var WALK_SPEED_BASE = 50
+var WALK_CYCLES_PER_TILE = 1
 var WANDER_PAUSE_MIN = 3000
 var WANDER_PAUSE_MAX = 9000
 var REMOVAL_DELAY = 30000
@@ -23,28 +20,17 @@ var STATE_ANIM = { walk: 'Walk', idle: 'Idle', work: 'Pose', attack: 'Attack', s
 var PERFORM_ACTIONS = ['attack', 'shock', 'eat', 'work']
 
 var FPS_POKEMON_ANIMS = 36
-// Per-frame durations in ticks at 36 FPS (from PMD sprite data)
-var FRAME_DURATIONS = {
-  Idle:    [40, 2, 3, 3, 3, 2],
-  Walk:    [8, 10, 8, 10],
-  Pose:    [8, 8, 8],
-  Attack:  [2, 2, 6, 2, 2, 2, 2, 2, 2, 2],
-  Shock:   [8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  Eat:     [10, 10, 10, 10],
-  Hop:     [2, 1, 2, 3, 4, 4, 3, 2, 1, 2],
-  Hurt:    [2, 8],
-  Sleep:   [30, 35]
-}
 var PERFORM_DURATION_MIN = 1500
 var PERFORM_DURATION_MAX = 3500
 
-var SPECIES = [
-  { name: 'Pikachu', type: 'electric' }
-]
+var SHADOW_IDLE_ACTIONS = { Attack: 1, Hop: 1, Hurt: 1, Shock: 1 }
 
 var TYPE_COLORS = {
   fire: '#f06030', water: '#3088d0', grass: '#40a030', electric: '#f0d020',
-  psychic: '#9058c0', steel: '#8898a8', ground: '#a07848', dark: '#585060'
+  psychic: '#9058c0', steel: '#8898a8', ground: '#a07848', dark: '#585060',
+  fairy: '#e888c8', fighting: '#c03028', rock: '#a8a060', ghost: '#6060b0',
+  bug: '#88a020', dragon: '#5828d8', normal: '#a0a078', ice: '#60c8d8',
+  flying: '#8070e0', poison: '#8040a0'
 }
 
 var NESTS = [
@@ -86,6 +72,22 @@ function loadTileset(callback) {
       .then(function(r) { return r.json() })
       .then(function(data) {
         townMapData = data
+        // Build collision grid from the dedicated collision layer
+        var collisionLayer = null
+        for (var li = 0; li < data.layers.length; li++) {
+          if (data.layers[li].name === 'collision') {
+            collisionLayer = data.layers[li].data
+            break
+          }
+        }
+        collisionGrid = []
+        for (var r = 0; r < ROWS; r++) {
+          collisionGrid[r] = []
+          for (var c = 0; c < COLS; c++) {
+            var idx = r * data.width + c
+            collisionGrid[r][c] = collisionLayer ? collisionLayer[idx] > 0 : false
+          }
+        }
         tilesetReady = true
         drawStaticTerrain()
         if (callback) callback()
@@ -97,7 +99,24 @@ function loadTileset(callback) {
 // Pathfinding
 
 function isWalkable(col, row) {
-  return col >= BOARD_COL_MIN && col <= BOARD_COL_MAX && row >= BOARD_ROW_MIN && row <= BOARD_ROW_MAX
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false
+  if (!collisionGrid) return false
+  return !collisionGrid[row][col]
+}
+
+function isTileOccupied(col, row, excludeId) {
+  var occupied = false
+  pokemon.forEach(function(cr) {
+    if (cr.id === excludeId) return
+    // Check current tile
+    if (cr.col === col && cr.row === row) { occupied = true; return }
+    // Check walk destination
+    if (cr.state === 'walk' && cr.path && cr.path.length > 0) {
+      var dest = cr.path[cr.path.length - 1]
+      if (dest.col === col && dest.row === row) { occupied = true; return }
+    }
+  })
+  return occupied
 }
 
 function findPath(sc, sr, ec, er) {
@@ -135,84 +154,149 @@ function findPath(sc, sr, ec, er) {
   return []
 }
 
-// Sprite Sheet
+// SpriteManager — per-species lazy loading of action sheets
 
-var spriteSheet = null
-var spriteFrames = {}
-var spriteAnims = {}    // { "Walk_Anim_0": [frame, ...] }
-var shadowAnims = {}    // { "Walk_Shadow_0": [frame, ...] }
-var spriteReady = false
+var SpriteManager = {
+  cache: {},     // dexNum → { animData, sheets: {}, ready }
+  loading: {},   // dexNum → true
 
-function loadSpriteSheet(callback) {
-  var img = new Image()
-  img.onload = function() {
-    spriteSheet = img
-    fetch('/assets/sprites/0025.json')
+  load: function(dexNum) {
+    if (this.cache[dexNum] || this.loading[dexNum]) return
+    this.loading[dexNum] = true
+
+    var self = this
+    var entry = { animData: {}, sheets: {}, ready: false }
+
+    fetch('/assets/sprites/' + dexNum + '/anim-data.json')
       .then(function(r) { return r.json() })
       .then(function(data) {
-        parseSpriteData(data)
-        spriteReady = true
-        if (callback) callback()
+        entry.animData = data
+
+        // Load action sheets we need
+        var actions = ['Idle', 'Walk', 'Attack', 'Pose', 'Eat', 'Hop', 'Hurt', 'Sleep', 'Shock']
+        var pending = 0
+        var loaded = 0
+
+        actions.forEach(function(action) {
+          if (!data[action]) return
+
+          // Load anim sheet
+          pending++
+          var animImg = new Image()
+          animImg.onload = function() {
+            entry.sheets[action + '-Anim'] = animImg
+            loaded++
+            if (loaded >= pending) finalize()
+          }
+          animImg.onerror = function() {
+            loaded++
+            if (loaded >= pending) finalize()
+          }
+          animImg.src = '/assets/sprites/' + dexNum + '/' + action + '-Anim.png'
+
+          // Load shadow sheet, filter by shadowSize, flatten to black
+          pending++
+          var shadowImg = new Image()
+          shadowImg.onload = function() {
+            var c = document.createElement('canvas')
+            c.width = shadowImg.naturalWidth
+            c.height = shadowImg.naturalHeight
+            var sc = c.getContext('2d')
+            sc.drawImage(shadowImg, 0, 0)
+            var imgData = sc.getImageData(0, 0, c.width, c.height)
+            var d = imgData.data
+            var ss = (data._shadowSize !== undefined) ? data._shadowSize : 2
+            for (var pi = 0; pi < d.length; pi += 4) {
+              if (d[pi + 3] === 0) continue
+              var r = d[pi], g = d[pi + 1], b = d[pi + 2]
+              // ShadowSize 0: remove red and blue marker pixels (nearly no shadow)
+              // ShadowSize 1: remove blue marker pixels (smaller shadow)
+              // ShadowSize 2+: keep everything (full shadow)
+              var isRed = r > 128 && g < 64 && b < 64
+              var isBlue = b > 128 && r < 64 && g < 64
+              if (ss === 0 && (isRed || isBlue)) { d[pi + 3] = 0; continue }
+              if (ss === 1 && isBlue) { d[pi + 3] = 0; continue }
+              // Flatten remaining to black
+              d[pi] = 0; d[pi + 1] = 0; d[pi + 2] = 0
+            }
+            sc.putImageData(imgData, 0, 0)
+            entry.sheets[action + '-Shadow'] = c
+            loaded++
+            if (loaded >= pending) finalize()
+          }
+          shadowImg.onerror = function() {
+            loaded++
+            if (loaded >= pending) finalize()
+          }
+          shadowImg.src = '/assets/sprites/' + dexNum + '/' + action + '-Shadow.png'
+        })
+
+        if (pending === 0) finalize()
+
+        function finalize() {
+          entry.ready = true
+          self.cache[dexNum] = entry
+          delete self.loading[dexNum]
+        }
       })
-  }
-  img.src = '/assets/sprites/0025.png'
-}
+      .catch(function() {
+        delete self.loading[dexNum]
+      })
+  },
 
-function parseSpriteData(data) {
-  var frames = data.textures[0].frames
+  get: function(dexNum) {
+    return this.cache[dexNum] || null
+  },
 
-  for (var i = 0; i < frames.length; i++) {
-    var f = frames[i]
-    spriteFrames[f.filename] = {
-      x: f.frame.x,
-      y: f.frame.y,
-      w: f.frame.w,
-      h: f.frame.h,
-      ox: f.spriteSourceSize.x,
-      oy: f.spriteSourceSize.y,
-      sw: f.sourceSize.w,
-      sh: f.sourceSize.h
+  _resolveAnim: function(dexNum, actionName) {
+    var entry = this.cache[dexNum]
+    if (!entry || !entry.ready) return null
+    var anim = entry.animData[actionName]
+    if (!anim) { anim = entry.animData['Idle']; actionName = 'Idle' }
+    if (!anim) return null
+    return { entry: entry, anim: anim, actionName: actionName }
+  },
+
+  _buildFrame: function(resolved, suffix, direction, frameIndex) {
+    var sheet = resolved.entry.sheets[resolved.actionName + '-' + suffix]
+    if (!sheet) return null
+    var anim = resolved.anim
+    var fi = frameIndex % anim.numFrames
+    var h = sheet.naturalHeight || sheet.height
+    var numRows = Math.floor(h / anim.frameHeight) || 1
+    var dir = numRows >= 8 ? direction : 0
+    return {
+      sheet: sheet,
+      sx: fi * anim.frameWidth,
+      sy: dir * anim.frameHeight,
+      sw: anim.frameWidth,
+      sh: anim.frameHeight
     }
-  }
+  },
 
-  // Build anim and shadow sequences
-  var animMap = {}
-  var shadowMap = {}
-  for (var i = 0; i < frames.length; i++) {
-    var fn = frames[i].filename
-    var parts = fn.split('/')
-    if (parts[0] !== 'Normal') continue
-    var target = null
-    if (parts[2] === 'Anim') target = animMap
-    else if (parts[2] === 'Shadow') target = shadowMap
-    else continue
-    var key = parts[1] + '_' + parts[3]
-    if (!target[key]) target[key] = []
-    target[key].push({ num: parts[4], filename: fn })
-  }
+  getFrame: function(dexNum, actionName, direction, frameIndex) {
+    var resolved = this._resolveAnim(dexNum, actionName)
+    return resolved ? this._buildFrame(resolved, 'Anim', direction, frameIndex) : null
+  },
 
-  function buildLookup(map) {
-    var result = {}
-    for (var key in map) {
-      map[key].sort(function(a, b) { return a.num.localeCompare(b.num) })
-      result[key] = map[key].map(function(e) { return spriteFrames[e.filename] })
-    }
-    return result
-  }
+  getShadowFrame: function(dexNum, actionName, direction, frameIndex) {
+    var resolved = this._resolveAnim(dexNum, actionName)
+    return resolved ? this._buildFrame(resolved, 'Shadow', direction, frameIndex) : null
+  },
 
-  spriteAnims = buildLookup(animMap)
-  shadowAnims = buildLookup(shadowMap)
-}
+  getAnimInfo: function(dexNum, actionName) {
+    var resolved = this._resolveAnim(dexNum, actionName)
+    return resolved ? resolved.anim : null
+  },
 
-function getSpriteFrames(state, dir) {
-  var animName = STATE_ANIM[state] || 'Idle'
-  var pmdDir = DIR_TO_PMD[dir]
-  if (pmdDir === undefined) pmdDir = 0
-  var key = animName + '_' + pmdDir
-  return {
-    anim: spriteAnims[key] || spriteAnims['Idle_0'] || [],
-    shadow: shadowAnims[key] || shadowAnims['Idle_0'] || [],
-    durations: FRAME_DURATIONS[animName] || FRAME_DURATIONS['Idle']
+  getWalkSpeed: function(dexNum) {
+    var anim = this.getAnimInfo(dexNum, 'Walk')
+    if (!anim || !anim.durations || anim.durations.length === 0) return WALK_SPEED_BASE
+    var totalTicks = 0
+    for (var i = 0; i < anim.durations.length; i++) totalTicks += anim.durations[i]
+    var cycleDurationMs = totalTicks * (1000 / FPS_POKEMON_ANIMS)
+    // Speed = pixels/sec to cross one tile in exactly WALK_CYCLES_PER_TILE animation cycles
+    return TILE / (cycleDurationMs * WALK_CYCLES_PER_TILE / 1000)
   }
 }
 
@@ -266,7 +350,7 @@ var lastTime = 0
 function initCanvas() {
   var container = document.getElementById('game-container')
   canvas = document.createElement('canvas')
-  canvas.style.imageRendering = 'auto'
+  canvas.style.imageRendering = 'pixelated'
   container.appendChild(canvas)
   ctx = canvas.getContext('2d')
 
@@ -275,8 +359,8 @@ function initCanvas() {
   terrainCanvas.height = ROWS * TILE
   terrainCtx = terrainCanvas.getContext('2d')
 
-  camera.x = ((BOARD_COL_MIN + BOARD_COL_MAX) / 2 + 0.5) * TILE
-  camera.y = ((BOARD_ROW_MIN + BOARD_ROW_MAX) / 2 + 0.5) * TILE
+  camera.x = (COLS / 2) * TILE
+  camera.y = (ROWS / 2) * TILE
   resizeCanvas()
   window.addEventListener('resize', resizeCanvas)
 }
@@ -401,8 +485,24 @@ function initInput() {
     if (dragState.target) {
       // Snap pokemon to grid on drop
       var cr = dragState.target
-      cr.col = Math.max(BOARD_COL_MIN, Math.min(BOARD_COL_MAX, Math.round((cr.x - TILE / 2) / TILE)))
-      cr.row = Math.max(BOARD_ROW_MIN, Math.min(BOARD_ROW_MAX, Math.round((cr.y - TILE / 2) / TILE)))
+      cr.col = Math.max(0, Math.min(COLS - 1, Math.round((cr.x - TILE / 2) / TILE)))
+      cr.row = Math.max(0, Math.min(ROWS - 1, Math.round((cr.y - TILE / 2) / TILE)))
+      // Snap to nearest walkable tile if dropped on a blocked tile
+      if (!isWalkable(cr.col, cr.row)) {
+        var found = false
+        for (var radius = 1; radius < 10 && !found; radius++) {
+          for (var dr = -radius; dr <= radius && !found; dr++) {
+            for (var dc = -radius; dc <= radius && !found; dc++) {
+              if (Math.abs(dr) === radius || Math.abs(dc) === radius) {
+                var nc = cr.col + dc, nr = cr.row + dr
+                if (isWalkable(nc, nr)) {
+                  cr.col = nc; cr.row = nr; found = true
+                }
+              }
+            }
+          }
+        }
+      }
       cr.x = cr.col * TILE + TILE / 2
       cr.y = cr.row * TILE + TILE / 2
       // Resume wandering from new position
@@ -538,6 +638,8 @@ var selectedId = null
 function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.id = sessionId
   this.species = species
+  this.speciesId = species.id
+  this.dexNum = species.dexNum
   this.nest = nestRef
   this.state = 'idle'
   this.dir = nestRef ? nestRef.dir : 'down'
@@ -557,10 +659,15 @@ function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.animTimer = 0
   this.username = null
   this.prompt = null
+  this.spawnTime = performance.now()
 }
 
-PokemonEntity.prototype.getAnimData = function() {
-  return getSpriteFrames(this.state, this.dir)
+PokemonEntity.prototype.getActionName = function() {
+  return STATE_ANIM[this.state] || 'Idle'
+}
+
+PokemonEntity.prototype.getAnimInfo = function() {
+  return SpriteManager.getAnimInfo(this.dexNum, this.getActionName())
 }
 
 PokemonEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
@@ -572,13 +679,13 @@ PokemonEntity.prototype.getFrameDurationMs = function(durations, frameIndex) {
 PokemonEntity.prototype.update = function(dt) {
   if (dragState.target === this) return
   // Per-frame duration animation
-  var data = this.getAnimData()
-  this.animTimer += dt
-  var frameDur = this.getFrameDurationMs(data.durations, this.animFrame)
-  if (this.animTimer >= frameDur) {
-    this.animTimer -= frameDur
-    if (data.anim.length > 0) {
-      this.animFrame = (this.animFrame + 1) % data.anim.length
+  var animInfo = this.getAnimInfo()
+  if (animInfo) {
+    this.animTimer += dt
+    var frameDur = this.getFrameDurationMs(animInfo.durations, this.animFrame)
+    if (this.animTimer >= frameDur) {
+      this.animTimer -= frameDur
+      this.animFrame = (this.animFrame + 1) % animInfo.numFrames
     }
   }
 
@@ -603,8 +710,17 @@ PokemonEntity.prototype.update = function(dt) {
   if (this.state === 'idle') {
     this.wanderTimer -= dt
     if (this.wanderTimer <= 0) {
-      if (Math.random() < 0.4) {
-        var action = PERFORM_ACTIONS[Math.floor(Math.random() * PERFORM_ACTIONS.length)]
+      // Check which actions have sprites loaded for this species
+      var availableActions = []
+      for (var ai = 0; ai < PERFORM_ACTIONS.length; ai++) {
+        var actionName = STATE_ANIM[PERFORM_ACTIONS[ai]]
+        if (SpriteManager.getAnimInfo(this.dexNum, actionName)) {
+          availableActions.push(PERFORM_ACTIONS[ai])
+        }
+      }
+
+      if (availableActions.length > 0 && Math.random() < 0.4) {
+        var action = availableActions[Math.floor(Math.random() * availableActions.length)]
         this.state = action
         this.animFrame = 0
         this.animTimer = 0
@@ -612,9 +728,9 @@ PokemonEntity.prototype.update = function(dt) {
         this.dir = DIRS[Math.floor(Math.random() * DIRS.length)]
       } else {
         for (var att = 0; att < 20; att++) {
-          var rc = BOARD_COL_MIN + Math.floor(Math.random() * (BOARD_COL_MAX - BOARD_COL_MIN + 1))
-          var rr = BOARD_ROW_MIN + Math.floor(Math.random() * (BOARD_ROW_MAX - BOARD_ROW_MIN + 1))
-          if (isWalkable(rc, rr)) {
+          var rc = Math.floor(Math.random() * COLS)
+          var rr = Math.floor(Math.random() * ROWS)
+          if (isWalkable(rc, rr) && !isTileOccupied(rc, rr, this.id)) {
             this.path = findPath(this.col, this.row, rc, rr)
             if (this.path.length > 0 && this.path.length < 15) break
           }
@@ -633,7 +749,8 @@ PokemonEntity.prototype.update = function(dt) {
 
   // Walking
   if (this.state === 'walk') {
-    this.moveProgress += (WALK_SPEED / TILE) * (dt / 1000)
+    var walkSpeed = SpriteManager.getWalkSpeed(this.dexNum)
+    this.moveProgress += (walkSpeed / TILE) * (dt / 1000)
     if (this.path.length === 0) {
       this.finishWalk()
       return
@@ -680,95 +797,114 @@ PokemonEntity.prototype.finishWalk = function() {
 }
 
 PokemonEntity.prototype.draw = function(ctx) {
-  if (!spriteReady) return
-
-  var data = this.getAnimData()
-  if (data.anim.length === 0) return
-
-  var frameIdx = this.animFrame % data.anim.length
-  var frame = data.anim[frameIdx]
+  var actionName = this.getActionName()
+  var pmdDir = DIR_TO_PMD[this.dir]
+  if (pmdDir === undefined) pmdDir = 0
   var screen = worldToScreen(this.x, this.y)
   var scale = camera.zoom * 1.0
 
-  // Center-anchor on sourceSize
-  var cx = screen.x - (frame.sw / 2) * scale
-  var cy = screen.y - (frame.sh / 2) * scale
+  var frame = SpriteManager.getFrame(this.dexNum, actionName, pmdDir, this.animFrame)
 
-  // Draw shadow from sprite sheet
-  if (data.shadow.length > 0) {
-    var sf = data.shadow[frameIdx % data.shadow.length]
-    var scx = screen.x - (sf.sw / 2) * scale
-    var scy = screen.y - (sf.sh / 2) * scale
+  if (!frame) {
+    // Placeholder: colored circle with type color
+    var r = 8 * scale
+    var typeColor = TYPE_COLORS[this.species.type] || '#888'
+    ctx.fillStyle = typeColor
+    ctx.globalAlpha = 0.6
+    ctx.beginPath()
+    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalAlpha = 1.0
+    // Still draw username and labels below
+    this.drawLabels(ctx, screen, scale)
+    return
+  }
 
+  // Draw shadow — use Idle for actions with larger frames (Attack, Hop, Hurt)
+  // to prevent drift from rush offsets baked into the sprite sheet.
+  // PAC avoids this via TexturePacker trim offsets; we use raw sheets.
+  var shadowAction = SHADOW_IDLE_ACTIONS[actionName] ? 'Idle' : actionName
+  var shadowFrame = SHADOW_IDLE_ACTIONS[actionName] ? 0 : this.animFrame
+  var shadow = SpriteManager.getShadowFrame(this.dexNum, shadowAction, pmdDir, shadowFrame)
+  if (shadow) {
     ctx.drawImage(
-      spriteSheet,
-      sf.x, sf.y, sf.w, sf.h,
-      scx + sf.ox * scale, scy + sf.oy * scale,
-      sf.w * scale, sf.h * scale
+      shadow.sheet,
+      shadow.sx, shadow.sy, shadow.sw, shadow.sh,
+      screen.x - (shadow.sw / 2) * scale,
+      screen.y - (shadow.sh / 2) * scale,
+      shadow.sw * scale, shadow.sh * scale
     )
   }
 
-  // Draw sprite (with selection outline + tint if selected)
-  var drawX = cx + frame.ox * scale
-  var drawY = cy + frame.oy * scale
-  var drawW = frame.w * scale
-  var drawH = frame.h * scale
+  var drawX = screen.x - (frame.sw / 2) * scale
+  var drawY = screen.y - (frame.sh / 2) * scale
+  var drawW = frame.sw * scale
+  var drawH = frame.sh * scale
 
+  // Legendary glow effect
+  if (this.species.rarity >= 3) {
+    ctx.save()
+    ctx.globalAlpha = 0.2 + Math.sin(performance.now() / 500) * 0.1
+    ctx.shadowColor = RARITY_COLORS[3]
+    ctx.shadowBlur = 16 * scale
+    ctx.drawImage(frame.sheet, frame.sx, frame.sy, frame.sw, frame.sh, drawX, drawY, drawW, drawH)
+    ctx.restore()
+  }
+
+  // Selection outline (offscreen tinted copies drawn behind the sprite)
   if (this.id === selectedId) {
     var typeColor = TYPE_COLORS[this.species.type] || '#ffffff'
-    if (!PokemonEntity._selCanvas) {
-      PokemonEntity._selCanvas = document.createElement('canvas')
-      PokemonEntity._selCtx = PokemonEntity._selCanvas.getContext('2d')
-    }
-    var sc2 = PokemonEntity._selCanvas
-    var sctx = PokemonEntity._selCtx
-    var pw = Math.ceil(frame.w) + 4
-    var ph = Math.ceil(frame.h) + 4
-    sc2.width = pw
-    sc2.height = ph
-    sctx.clearRect(0, 0, pw, ph)
-    sctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2, 2, frame.w, frame.h)
-
-    // Outline: draw the sprite offset in 4 directions, then composite the color
-    sctx.globalCompositeOperation = 'source-over'
     if (!PokemonEntity._outlineCanvas) {
       PokemonEntity._outlineCanvas = document.createElement('canvas')
       PokemonEntity._outlineCtx = PokemonEntity._outlineCanvas.getContext('2d')
     }
-    var outlineCanvas = PokemonEntity._outlineCanvas
+    var oc = PokemonEntity._outlineCanvas
     var octx = PokemonEntity._outlineCtx
-    outlineCanvas.width = pw
-    outlineCanvas.height = ph
+    oc.width = frame.sw + 2
+    oc.height = frame.sh + 2
+    // Draw sprite offset in 4 directions
     var offsets = [[-1,0],[1,0],[0,-1],[0,1]]
     for (var oi = 0; oi < offsets.length; oi++) {
-      octx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2 + offsets[oi][0], 2 + offsets[oi][1], frame.w, frame.h)
+      octx.drawImage(frame.sheet, frame.sx, frame.sy, frame.sw, frame.sh, 1 + offsets[oi][0], 1 + offsets[oi][1], frame.sw, frame.sh)
     }
-    // Color the outline
+    // Tint to type color
     octx.globalCompositeOperation = 'source-atop'
     octx.fillStyle = typeColor
-    octx.fillRect(0, 0, pw, ph)
+    octx.fillRect(0, 0, oc.width, oc.height)
+    // Cut out the original sprite shape
     octx.globalCompositeOperation = 'destination-out'
-    octx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 2, 2, frame.w, frame.h)
-
+    octx.drawImage(frame.sheet, frame.sx, frame.sy, frame.sw, frame.sh, 1, 1, frame.sw, frame.sh)
+    octx.globalCompositeOperation = 'source-over'
     // Draw outline behind sprite
-    ctx.drawImage(outlineCanvas, drawX - 2 * scale, drawY - 2 * scale, pw * scale, ph * scale)
-
-    // Draw sprite with slight tint overlay
-    ctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, drawX, drawY, drawW, drawH)
-    ctx.save()
-    ctx.globalAlpha = 0.15
-    sctx.clearRect(0, 0, pw, ph)
-    sctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h)
-    sctx.globalCompositeOperation = 'source-atop'
-    sctx.fillStyle = typeColor
-    sctx.fillRect(0, 0, frame.w, frame.h)
-    sctx.globalCompositeOperation = 'source-over'
-    ctx.drawImage(sc2, 0, 0, frame.w, frame.h, drawX, drawY, drawW, drawH)
-    ctx.restore()
-  } else {
-    ctx.drawImage(spriteSheet, frame.x, frame.y, frame.w, frame.h, drawX, drawY, drawW, drawH)
+    ctx.drawImage(oc, drawX - 1 * scale, drawY - 1 * scale, (frame.sw + 2) * scale, (frame.sh + 2) * scale)
   }
 
+  // Draw main sprite
+  ctx.drawImage(frame.sheet, frame.sx, frame.sy, frame.sw, frame.sh, drawX, drawY, drawW, drawH)
+
+  // Rare sparkle effect
+  if (this.species.rarity >= 2) {
+    var time = performance.now()
+    for (var si = 0; si < 4; si++) {
+      var angle = (time / 1200 + si * 1.57) % (Math.PI * 2)
+      var radius = 10 * scale
+      var sparkX = screen.x + Math.cos(angle) * radius
+      var sparkY = screen.y + Math.sin(angle) * radius - 6 * scale
+      var sparkSize = (Math.sin(time / 250 + si * 1.3) * 0.5 + 1) * scale
+      ctx.fillStyle = this.species.rarity >= 3 ? RARITY_COLORS[3] : '#fff'
+      ctx.globalAlpha = Math.sin(time / 300 + si) * 0.3 + 0.7
+      ctx.fillRect(sparkX - sparkSize / 2, sparkY - sparkSize / 2, sparkSize, sparkSize)
+      // Cross sparkle
+      ctx.fillRect(sparkX - sparkSize * 1.5 / 2, sparkY - sparkSize * 0.3 / 2, sparkSize * 1.5, sparkSize * 0.3)
+      ctx.fillRect(sparkX - sparkSize * 0.3 / 2, sparkY - sparkSize * 1.5 / 2, sparkSize * 0.3, sparkSize * 1.5)
+    }
+    ctx.globalAlpha = 1.0
+  }
+
+  this.drawLabels(ctx, screen, scale)
+}
+
+PokemonEntity.prototype.drawLabels = function(ctx, screen, scale) {
   var lvFontSize = Math.max(6, Math.round(8 * camera.zoom / 3))
   var spriteTop = screen.y - 16 * scale
 
@@ -821,8 +957,7 @@ PokemonEntity.prototype.draw = function(ctx) {
 // Render Loop
 
 function render() {
-  ctx.imageSmoothingEnabled = camera.zoom < 1
-  ctx.imageSmoothingQuality = 'high'
+  ctx.imageSmoothingEnabled = false
   ctx.clearRect(0, 0, viewW(), viewH())
   ctx.fillStyle = '#0f1f0a'
   ctx.fillRect(0, 0, viewW(), viewH())
@@ -853,7 +988,10 @@ function createPokemon(sessionId, speciesIndex) {
   if (pokemon.has(sessionId)) return pokemon.get(sessionId)
 
   var idx = (typeof speciesIndex === 'number') ? speciesIndex : 0
-  var sp = SPECIES[idx % SPECIES.length]
+  var sp = SPECIES[idx] || SPECIES[0]
+
+  // Trigger sprite loading for this species
+  SpriteManager.load(sp.dexNum)
 
   var nest = null
   for (var i = 0; i < NESTS.length; i++) {
@@ -864,9 +1002,27 @@ function createPokemon(sessionId, speciesIndex) {
     }
   }
 
-  var cr = new PokemonEntity(sessionId, sp, nest ? nest.col : 25, nest ? nest.row : 16, nest)
+  var spawnCol = 25, spawnRow = 10
+  if (nest) {
+    spawnCol = nest.col; spawnRow = nest.row
+  } else {
+    // Find a random walkable tile
+    for (var si = 0; si < 50; si++) {
+      var sc = Math.floor(Math.random() * COLS)
+      var sr = Math.floor(Math.random() * ROWS)
+      if (isWalkable(sc, sr)) { spawnCol = sc; spawnRow = sr; break }
+    }
+  }
+  var cr = new PokemonEntity(sessionId, sp, spawnCol, spawnRow, nest)
   pokemon.set(sessionId, cr)
   updateEncounterCount()
+
+  // Show toast for rare+ catches (only for new spawns)
+  if (sp.rarity >= 2) {
+    var who = cr.username || 'someone'
+    showToast(who + ' caught a wild ' + sp.name + '!', RARITY_COLORS[sp.rarity])
+  }
+
   return cr
 }
 
@@ -914,6 +1070,117 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;')
 }
 
+// Collection state
+
+var myCollection = {} // speciesId → count
+var viewerUsername = ''
+
+function initCollection() {
+  // Check URL for viewer username
+  var params = new URLSearchParams(location.search)
+  viewerUsername = params.get('viewer') || ''
+}
+
+function updateCollectionFromServer(collections) {
+  if (!collections) return
+  if (viewerUsername && collections[viewerUsername]) {
+    myCollection = collections[viewerUsername]
+  } else {
+    // Merge all collections for global view
+    myCollection = {}
+    for (var user in collections) {
+      var coll = collections[user]
+      for (var sid in coll) {
+        myCollection[sid] = (myCollection[sid] || 0) + coll[sid]
+      }
+    }
+  }
+  updatePokedex()
+  updateEncounterCount()
+}
+
+function addToCollection(speciesId) {
+  myCollection[speciesId] = (myCollection[speciesId] || 0) + 1
+  updatePokedex()
+  updateEncounterCount()
+}
+
+// Pokédex UI
+
+var pokedexCells = [] // cached cell references: { el, img, badge }
+
+function initPokedex() {
+  var grid = document.getElementById('pokedex-grid')
+  if (!grid) return
+
+  for (var i = 0; i < SPECIES.length; i++) {
+    var sp = SPECIES[i]
+    var cell = document.createElement('div')
+    cell.className = 'pokedex-cell unseen'
+    cell.title = '???'
+
+    var img = document.createElement('img')
+    img.src = '/assets/portraits/' + sp.dexNum + '.png'
+    img.alt = '???'
+    img.draggable = false
+
+    var badge = document.createElement('span')
+    badge.className = 'encounter-badge'
+
+    cell.appendChild(img)
+    cell.appendChild(badge)
+    grid.appendChild(cell)
+    pokedexCells.push({ el: cell, img: img, badge: badge })
+  }
+}
+
+function updatePokedex() {
+  var caught = 0
+  for (var i = 0; i < SPECIES.length; i++) {
+    var sp = SPECIES[i]
+    var ref = pokedexCells[i]
+    if (!ref) continue
+
+    var count = myCollection[sp.id] || 0
+    if (count > 0) {
+      caught++
+      ref.el.className = 'pokedex-cell caught'
+      ref.el.title = sp.name + ' — ' + RARITY_NAMES[sp.rarity]
+      ref.img.alt = sp.name
+      ref.badge.textContent = count > 1 ? 'x' + count : ''
+    } else {
+      ref.el.className = 'pokedex-cell unseen'
+      ref.el.title = '???'
+      ref.img.alt = '???'
+      ref.badge.textContent = ''
+    }
+  }
+
+  var counter = document.getElementById('pokedex-counter')
+  if (counter) counter.textContent = caught + '/' + SPECIES.length + ' CAUGHT'
+}
+
+// Toast notifications
+
+function showToast(message, color) {
+  var container = document.getElementById('toast-container')
+  if (!container) return
+
+  var toast = document.createElement('div')
+  toast.className = 'toast'
+  if (color) toast.style.borderLeftColor = color
+  toast.textContent = message
+  container.appendChild(toast)
+
+  // Trigger animation
+  requestAnimationFrame(function() { toast.classList.add('visible') })
+
+  setTimeout(function() {
+    toast.classList.add('fade-out')
+    setTimeout(function() { toast.remove() }, 500)
+  }, 4000)
+}
+
 // Hover Card
 
 var hoverCardEl = null
@@ -929,9 +1196,12 @@ function initHoverCard() {
 function showHoverCard(cr, screenX, screenY) {
   if (!hoverCardEl || !cr) return
   hoveredPokemonId = cr.id
+
   hoverCardVisible = true
 
   var typeColor = TYPE_COLORS[cr.species.type] || '#fff'
+  var rarityName = RARITY_NAMES[cr.species.rarity]
+  var rarityColor = RARITY_COLORS[cr.species.rarity]
   var safeName = escapeHtml((cr.username && cr.username !== 'anonymous') ? '@' + cr.username : 'anonymous')
   var safeSpecies = escapeHtml(cr.species.name)
   var safeStatus = escapeHtml(cr.statusText || 'idle')
@@ -946,10 +1216,13 @@ function showHoverCard(cr, screenX, screenY) {
   hoverCardEl.innerHTML =
     '<div class="hc-box">' +
       '<div class="hc-row">' +
-        '<img class="hc-portrait" src="/assets/portraits/0025.png" alt="' + safeSpecies + '">' +
+        '<img class="hc-portrait" src="/assets/portraits/' + cr.dexNum + '.png" alt="' + safeSpecies + '">' +
         '<div class="hc-info">' +
           '<div class="hc-username">' + safeName + '</div>' +
-          '<div class="hc-species" style="color:' + typeColor + '">' + safeSpecies + '</div>' +
+          '<div class="hc-species-row">' +
+            '<span class="hc-species" style="color:' + typeColor + '">' + safeSpecies + '</span>' +
+            '<span class="hc-rarity" style="color:' + rarityColor + '">' + rarityName + '</span>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<div class="hc-divider"></div>' +
@@ -1022,7 +1295,11 @@ function updateHoverCard() {
 // DOM UI
 
 function updateEncounterCount() {
-  document.getElementById('encounter-count').textContent = 'WILD ' + pokemon.size + ' FOUND'
+  var caught = 0
+  for (var k in myCollection) {
+    if (myCollection[k] > 0) caught++
+  }
+  document.getElementById('encounter-count').textContent = caught + '/' + SPECIES.length + ' CAUGHT'
 }
 
 // WebSocket
@@ -1073,7 +1350,9 @@ function handleMsg(m) {
           cr.isActive = a.isActive
           cr.statusText = a.status || 'idle'
         })
-  
+      }
+      if (m.collections) {
+        updateCollectionFromServer(m.collections)
       }
       break
 
@@ -1092,7 +1371,6 @@ function handleMsg(m) {
       if (m.username) cr.username = m.username
       cr.isActive = true
       cr.statusText = m.status || ('Using ' + (m.toolName || 'tool'))
-
       break
 
     case 'tool_done':
@@ -1100,7 +1378,6 @@ function handleMsg(m) {
       cr = pokemon.get(m.sessionId)
       if (cr) {
         cr.statusText = 'thinking\u2026'
-  
       }
       break
 
@@ -1110,7 +1387,6 @@ function handleMsg(m) {
       if (!cr) break
       if (!cr.isActive) cr.statusText = 'alert!'
       cr.isActive = true
-
       break
 
     case 'new_turn':
@@ -1123,7 +1399,6 @@ function handleMsg(m) {
       if (m.prompt) cr.prompt = m.prompt
       cr.bubbleType = null
       cr.bubbleTimer = 0
-
       break
 
     case 'turn_end':
@@ -1135,7 +1410,6 @@ function handleMsg(m) {
         cr.state = 'idle'
         cr.animFrame = 0
         cr.animTimer = 0
-  
       }
       break
 
@@ -1152,7 +1426,6 @@ function handleMsg(m) {
         cr.bubbleTimer = 5000
         cr.statusText = 'waiting\u2026'
       }
-
       break
 
     case 'hook_subagent_start':
@@ -1160,7 +1433,6 @@ function handleMsg(m) {
       cr = createPokemon(subId)
       if (cr) {
         cr.statusText = 'summoned!'
-  
       }
       break
 
@@ -1192,13 +1464,18 @@ function handleMsg(m) {
       if (cr) {
         cr.isActive = false
         cr.statusText = 'clearing\u2026'
-  
       }
       break
 
     case 'hook_session_end':
       endedSessions.add(m.sessionId)
       removePokemon(m.sessionId)
+      break
+
+    case 'collection_update':
+      if (m.collections) {
+        updateCollectionFromServer(m.collections)
+      }
       break
   }
 }
@@ -1209,6 +1486,8 @@ initTileData()
 initCanvas()
 initInput()
 initHoverCard()
+initCollection()
+initPokedex()
 
 setTimeout(function() {
   fetch('/api/status')
@@ -1243,9 +1522,7 @@ document.getElementById('close-setup').addEventListener('click', function() {
 updateEncounterCount()
 
 loadTileset(function() {
-  loadSpriteSheet(function() {
-    connectWS()
-    lastTime = performance.now()
-    requestAnimationFrame(gameLoop)
-  })
+  connectWS()
+  lastTime = performance.now()
+  requestAnimationFrame(gameLoop)
 })
