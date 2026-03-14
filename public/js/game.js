@@ -359,8 +359,8 @@ function initCanvas() {
   terrainCanvas.height = ROWS * TILE
   terrainCtx = terrainCanvas.getContext('2d')
 
-  camera.x = (COLS / 2) * TILE
-  camera.y = (ROWS / 2) * TILE
+  camera.x = (COLS / 2.25) * TILE
+  camera.y = 0
   resizeCanvas()
   window.addEventListener('resize', resizeCanvas)
 }
