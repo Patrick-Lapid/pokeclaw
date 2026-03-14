@@ -6,18 +6,17 @@ A Pokedex for your Claude Code agents. Watch your coding sessions come to life a
 
 ## What is it?
 
-Pokeclaw monitors your active [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and represents each one as a unique pixel-art pokemon. Pokemon wander around a tile-based overworld, react to tool usage in real time, and level up as your agents work.
-
-<img width="1664" height="1308" alt="image" src="https://github.com/user-attachments/assets/eaeb1b22-a872-403a-8e76-d40762a1ca18" />
-
+Pokeclaw monitors your active [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions and represents each one as a unique pixel-art pokemon. Pokemon wander around a tile-based overworld and react to tool usage in real time.
 
 ## Features
 
+- **24 pokemon species** — 4 rarity tiers (common, uncommon, rare, legendary) with weighted random assignment
 - **Real-time activity tracking** — pokemon show what your agent is doing (reading, editing, searching, running commands)
-- **XP & leveling** — every tool call earns XP; pokemon level up over time
-- **Persistent data** — XP and species assignments are saved across sessions in `~/.pokeclaw/data.json`
-- **Interactive canvas** — pan, zoom, and click to select pokemon
-- **Party bar** — quick overview of all active agents with status and level
+- **Pokédex & collections** — track which species you've encountered across sessions
+- **Hover cards** — PMD-style popup cards showing species, username, rarity, and current status
+- **Visual effects** — legendary glow, rare sparkle effects, and type-colored selection outlines
+- **Persistent data** — species assignments and collections saved across sessions in `~/.pokeclaw/data.json`
+- **Interactive canvas** — pan, zoom, click to select, and drag pokemon
 - **Hooks integration** — optional Claude Code hooks for instant updates (tool start/stop, notifications, subagent spawns)
 - **Auto-discovery** — scans `~/.claude/projects/` for recent session transcripts
 
@@ -44,10 +43,10 @@ pokeclaw [options]
 
 | Option | Description |
 |---|---|
-| `--room <name>` | Set and save room name (default: saved preference or prompt) |
+| `--world <name>` | Set and save world name (default: saved preference or prompt) |
 | `--username <name>` | Set and save username for your pokemon |
-| `--reset` | Re-prompt for room and username |
-| `--dev` | Use local PartyKit dev server (localhost:1999) |
+| `--reset` | Re-prompt for world and username |
+| `--dev` | Use local dev server (localhost:8787) |
 | `--no-open` | Don't auto-open the browser |
 | `--uninstall-hooks` | Remove pokeclaw hooks from `~/.claude/settings.json` |
 | `--help`, `-h` | Show help |
@@ -74,11 +73,12 @@ pokeclaw --uninstall-hooks
 
 ## How It Works
 
-1. When you run `pokeclaw`, it configures Claude Code hooks to POST events to a shared PartyKit server
-2. Each Claude Code session is represented as a unique pokemon in a shared room
-3. Tool usage, turn boundaries, and progress events are broadcast in real time
+1. When you run `pokeclaw`, it configures Claude Code hooks to POST events to a shared server
+2. Each Claude Code session is assigned a random pokemon species from the weighted roster
+3. Tool usage, turn boundaries, and progress events are broadcast in real time via WebSocket
 4. The browser renders an interactive pixel-art overworld with pokemon mapped to sessions
-5. Config (room, username) is persisted in `~/.pokeclaw/config.json`
+5. Collections track unique species encountered per username
+6. Config (world, username) is persisted in `~/.pokeclaw/config.json`
 
 ## License
 
