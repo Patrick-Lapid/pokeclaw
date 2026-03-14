@@ -20,5 +20,8 @@
   "license": "MIT",
   "devDependencies": {
     "partykit": "^0.0.115"
+  },
+  "dependencies": {
+    "partyserver": "^0.3.3"
   }
 }
