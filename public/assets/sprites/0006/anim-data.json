@@ -1,0 +1,220 @@
+{
+  "_shadowSize": 2,
+  "Walk": {
+    "frameWidth": 40,
+    "frameHeight": 48,
+    "numFrames": 4,
+    "durations": [
+      8,
+      10,
+      8,
+      10
+    ]
+  },
+  "Attack": {
+    "frameWidth": 80,
+    "frameHeight": 88,
+    "numFrames": 14,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      4,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Strike": {
+    "frameWidth": 72,
+    "frameHeight": 80,
+    "numFrames": 13,
+    "durations": [
+      2,
+      2,
+      6,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Shoot": {
+    "frameWidth": 56,
+    "frameHeight": 56,
+    "numFrames": 11,
+    "durations": [
+      4,
+      6,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "SpAttack": {
+    "frameWidth": 56,
+    "frameHeight": 56,
+    "numFrames": 11,
+    "durations": [
+      4,
+      6,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Sleep": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "numFrames": 2,
+    "durations": [
+      30,
+      35
+    ]
+  },
+  "Hurt": {
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "numFrames": 2,
+    "durations": [
+      2,
+      8
+    ]
+  },
+  "Idle": {
+    "frameWidth": 40,
+    "frameHeight": 48,
+    "numFrames": 4,
+    "durations": [
+      15,
+      15,
+      15,
+      15
+    ]
+  },
+  "Swing": {
+    "frameWidth": 88,
+    "frameHeight": 96,
+    "numFrames": 9,
+    "durations": [
+      2,
+      1,
+      2,
+      2,
+      3,
+      2,
+      2,
+      1,
+      1
+    ]
+  },
+  "Double": {
+    "frameWidth": 64,
+    "frameHeight": 72,
+    "numFrames": 16,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Hop": {
+    "frameWidth": 48,
+    "frameHeight": 96,
+    "numFrames": 10,
+    "durations": [
+      2,
+      1,
+      2,
+      3,
+      4,
+      4,
+      3,
+      2,
+      1,
+      2
+    ]
+  },
+  "Charge": {
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "numFrames": 10,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Rotate": {
+    "frameWidth": 40,
+    "frameHeight": 48,
+    "numFrames": 9,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Faint": {
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "numFrames": 4,
+    "durations": [
+      8,
+      12,
+      4,
+      10
+    ]
+  }
+}

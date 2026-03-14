@@ -1,0 +1,207 @@
+{
+  "_shadowSize": 2,
+  "Walk": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "numFrames": 4,
+    "durations": [
+      8,
+      10,
+      8,
+      10
+    ]
+  },
+  "Attack": {
+    "frameWidth": 64,
+    "frameHeight": 88,
+    "numFrames": 10,
+    "durations": [
+      2,
+      8,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Stomp": {
+    "frameWidth": 80,
+    "frameHeight": 104,
+    "numFrames": 14,
+    "durations": [
+      6,
+      2,
+      2,
+      3,
+      2,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Shoot": {
+    "frameWidth": 40,
+    "frameHeight": 56,
+    "numFrames": 12,
+    "durations": [
+      2,
+      2,
+      6,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Twirl": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "numFrames": 9,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Sleep": {
+    "frameWidth": 40,
+    "frameHeight": 24,
+    "numFrames": 2,
+    "durations": [
+      30,
+      35
+    ]
+  },
+  "Hurt": {
+    "frameWidth": 48,
+    "frameHeight": 64,
+    "numFrames": 2,
+    "durations": [
+      2,
+      8
+    ]
+  },
+  "Idle": {
+    "frameWidth": 32,
+    "frameHeight": 64,
+    "numFrames": 6,
+    "durations": [
+      40,
+      1,
+      3,
+      4,
+      3,
+      1
+    ]
+  },
+  "Swing": {
+    "frameWidth": 72,
+    "frameHeight": 80,
+    "numFrames": 9,
+    "durations": [
+      2,
+      1,
+      2,
+      2,
+      3,
+      2,
+      2,
+      1,
+      1
+    ]
+  },
+  "Double": {
+    "frameWidth": 56,
+    "frameHeight": 80,
+    "numFrames": 16,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Hop": {
+    "frameWidth": 32,
+    "frameHeight": 96,
+    "numFrames": 10,
+    "durations": [
+      2,
+      1,
+      2,
+      3,
+      4,
+      4,
+      3,
+      2,
+      1,
+      2
+    ]
+  },
+  "Charge": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "numFrames": 10,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Rotate": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "numFrames": 9,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  }
+}

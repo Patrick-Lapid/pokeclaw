@@ -1,0 +1,316 @@
+{
+  "_shadowSize": 1,
+  "Walk": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 5,
+    "durations": [
+      10,
+      8,
+      8,
+      8,
+      8
+    ]
+  },
+  "Attack": {
+    "frameWidth": 64,
+    "frameHeight": 80,
+    "numFrames": 10,
+    "durations": [
+      2,
+      4,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Strike": {
+    "frameWidth": 64,
+    "frameHeight": 80,
+    "numFrames": 10,
+    "durations": [
+      2,
+      4,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Shoot": {
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "numFrames": 13,
+    "durations": [
+      2,
+      2,
+      4,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "SpAttack": {
+    "frameWidth": 40,
+    "frameHeight": 48,
+    "numFrames": 12,
+    "durations": [
+      6,
+      2,
+      2,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "RearUp": {
+    "frameWidth": 40,
+    "frameHeight": 48,
+    "numFrames": 12,
+    "durations": [
+      6,
+      2,
+      2,
+      1,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Sleep": {
+    "frameWidth": 24,
+    "frameHeight": 24,
+    "numFrames": 2,
+    "durations": [
+      30,
+      35
+    ]
+  },
+  "Hurt": {
+    "frameWidth": 48,
+    "frameHeight": 64,
+    "numFrames": 2,
+    "durations": [
+      2,
+      8
+    ]
+  },
+  "Idle": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 4,
+    "durations": [
+      10,
+      20,
+      10,
+      20
+    ]
+  },
+  "Swing": {
+    "frameWidth": 80,
+    "frameHeight": 80,
+    "numFrames": 9,
+    "durations": [
+      2,
+      1,
+      2,
+      2,
+      3,
+      2,
+      2,
+      1,
+      1
+    ]
+  },
+  "Double": {
+    "frameWidth": 56,
+    "frameHeight": 72,
+    "numFrames": 16,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      3,
+      3,
+      3,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Hop": {
+    "frameWidth": 32,
+    "frameHeight": 88,
+    "numFrames": 10,
+    "durations": [
+      2,
+      1,
+      2,
+      3,
+      4,
+      4,
+      3,
+      2,
+      1,
+      2
+    ]
+  },
+  "Charge": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 10,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Rotate": {
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "numFrames": 9,
+    "durations": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "EventSleep": {
+    "frameWidth": 24,
+    "frameHeight": 32,
+    "numFrames": 2,
+    "durations": [
+      30,
+      35
+    ]
+  },
+  "Wake": {
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "numFrames": 5,
+    "durations": [
+      8,
+      6,
+      14,
+      4,
+      10
+    ]
+  },
+  "Tumble": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 8,
+    "durations": [
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3
+    ]
+  },
+  "Pain": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 12,
+    "durations": [
+      4,
+      1,
+      1,
+      1,
+      2,
+      1,
+      4,
+      2,
+      2,
+      2,
+      2,
+      2
+    ]
+  },
+  "Float": {
+    "frameWidth": 24,
+    "frameHeight": 32,
+    "numFrames": 4,
+    "durations": [
+      9,
+      18,
+      9,
+      14
+    ]
+  },
+  "Laying": {
+    "frameWidth": 24,
+    "frameHeight": 24,
+    "numFrames": 1,
+    "durations": [
+      12
+    ]
+  },
+  "TumbleBack": {
+    "frameWidth": 32,
+    "frameHeight": 40,
+    "numFrames": 10,
+    "durations": [
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3,
+      3
+    ]
+  }
+}
