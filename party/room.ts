@@ -34,25 +34,76 @@ function toolStatus(toolName: string, toolInput: Record<string, unknown> | undef
   }
 }
 
+// Species data (duplicated from public/js/species.js for server-side rolling)
+const SPECIES_DATA = [
+  { id: 0,  name: 'Bulbasaur',  rarity: 0 },
+  { id: 1,  name: 'Charmander', rarity: 0 },
+  { id: 2,  name: 'Squirtle',   rarity: 0 },
+  { id: 3,  name: 'Pikachu',    rarity: 0 },
+  { id: 4,  name: 'Jigglypuff', rarity: 0 },
+  { id: 5,  name: 'Meowth',     rarity: 0 },
+  { id: 6,  name: 'Psyduck',    rarity: 0 },
+  { id: 7,  name: 'Machop',     rarity: 0 },
+  { id: 8,  name: 'Geodude',    rarity: 0 },
+  { id: 9,  name: 'Eevee',      rarity: 0 },
+  { id: 10, name: 'Growlithe',  rarity: 1 },
+  { id: 11, name: 'Abra',       rarity: 1 },
+  { id: 12, name: 'Gastly',     rarity: 1 },
+  { id: 13, name: 'Scyther',    rarity: 1 },
+  { id: 14, name: 'Snorlax',    rarity: 1 },
+  { id: 15, name: 'Dratini',    rarity: 1 },
+  { id: 16, name: 'Togepi',     rarity: 1 },
+  { id: 17, name: 'Larvitar',   rarity: 1 },
+  { id: 18, name: 'Charizard',  rarity: 2 },
+  { id: 19, name: 'Gengar',     rarity: 2 },
+  { id: 20, name: 'Dragonite',  rarity: 2 },
+  { id: 21, name: 'Tyranitar',  rarity: 2 },
+  { id: 22, name: 'Mewtwo',     rarity: 3 },
+  { id: 23, name: 'Mew',        rarity: 3 }
+];
+
+const RARITY_WEIGHTS = [0.06, 0.035, 0.025, 0.01];
+
+function rollSpecies(): number {
+  const roll = Math.random();
+  let cumulative = 0;
+  for (let i = 0; i < SPECIES_DATA.length; i++) {
+    cumulative += RARITY_WEIGHTS[SPECIES_DATA[i].rarity];
+    if (roll < cumulative) return i;
+  }
+  return 0;
+}
+
 export class World extends Server {
   agents = new Map<string, AgentState>();
-  speciesCounter = 0;
   sessionSpecies = new Map<string, number>();
   sessionLastSeen = new Map<string, number>();
   endedSessions = new Set<string>();
   recentlyCleared = new Map<string, { timestamp: number; speciesIndex: number }>();
+  collections = new Map<string, Record<string, number>>();
 
-  getSpeciesIndex(sessionId: string): number {
+  getOrRollSpecies(sessionId: string): number {
     if (this.sessionSpecies.has(sessionId)) return this.sessionSpecies.get(sessionId)!;
-    const idx = this.speciesCounter++;
+    const idx = rollSpecies();
     this.sessionSpecies.set(sessionId, idx);
     return idx;
+  }
+
+  updateCollection(username: string, speciesId: number) {
+    if (!username || username === 'anonymous') return;
+    let coll = this.collections.get(username);
+    if (!coll) { coll = {}; this.collections.set(username, coll); }
+    const key = String(speciesId);
+    coll[key] = (coll[key] || 0) + 1;
+    // Persist to DO storage
+    this.ctx.storage.put('collection:' + username, coll);
   }
 
   onConnect(conn: Connection, ctx: ConnectionContext) {
     conn.send(JSON.stringify({
       type:   'world_init',
-      agents: [...this.agents.values()]
+      agents: [...this.agents.values()],
+      collections: Object.fromEntries(this.collections)
     }));
   }
 
@@ -125,7 +176,8 @@ export class World extends Server {
 
     // Discover session if new
     if (!this.agents.has(sessionId) && hookName !== 'SessionEnd') {
-      const speciesIndex = this.getSpeciesIndex(sessionId);
+      const speciesIndex = this.getOrRollSpecies(sessionId);
+      this.updateCollection(username, speciesIndex);
       const discoveryEvent = {
         type: 'session_discovered',
         sessionId,
@@ -184,7 +236,7 @@ export class World extends Server {
       }
       case 'UserPromptSubmit': {
         const prompt = (data.prompt as string) || '';
-        events.push({ type: 'hook_new_turn', sessionId, prompt });
+        events.push({ type: 'hook_new_turn', sessionId, prompt, username });
         break;
       }
       case 'SessionStart': {
@@ -214,11 +266,12 @@ export class World extends Server {
           break;
         }
 
+        const speciesIndex = this.getOrRollSpecies(sessionId);
         const startEvent = {
           type: 'hook_session_start',
           sessionId,
           replacesSessionId,
-          speciesIndex: this.getSpeciesIndex(sessionId),
+          speciesIndex,
           username,
         };
         events.push(startEvent);

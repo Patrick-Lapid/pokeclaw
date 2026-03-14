@@ -12,11 +12,43 @@ const knownSessions = new Set();
 const endedSessions = new Set(); // sessions that have ended (SessionEnd received)
 const sessionLastSeen = new Map(); // sessionId → timestamp of last hook event
 const sessionTranscripts = new Map(); // sessionId → transcript file path
-const sessionSpecies = new Map(); // sessionId → species index
+const sessionSpecies = new Map(); // sessionId → species index (into SPECIES_DATA)
+const sessionUsernames = new Map(); // sessionId → username
+const collections = new Map(); // username → { speciesId: count }
 const recentlyCleared = new Map(); // sessionId → { timestamp, speciesIndex }
-let speciesCounter = 0;
 let wss = null;
 let server = null;
+
+// ── Species data (duplicated from public/js/species.js for server-side rolling) ─
+
+const SPECIES_DATA = [
+  { id: 0,  name: 'Bulbasaur',  rarity: 0 },
+  { id: 1,  name: 'Charmander', rarity: 0 },
+  { id: 2,  name: 'Squirtle',   rarity: 0 },
+  { id: 3,  name: 'Pikachu',    rarity: 0 },
+  { id: 4,  name: 'Jigglypuff', rarity: 0 },
+  { id: 5,  name: 'Meowth',     rarity: 0 },
+  { id: 6,  name: 'Psyduck',    rarity: 0 },
+  { id: 7,  name: 'Machop',     rarity: 0 },
+  { id: 8,  name: 'Geodude',    rarity: 0 },
+  { id: 9,  name: 'Eevee',      rarity: 0 },
+  { id: 10, name: 'Growlithe',  rarity: 1 },
+  { id: 11, name: 'Abra',       rarity: 1 },
+  { id: 12, name: 'Gastly',     rarity: 1 },
+  { id: 13, name: 'Scyther',    rarity: 1 },
+  { id: 14, name: 'Snorlax',    rarity: 1 },
+  { id: 15, name: 'Dratini',    rarity: 1 },
+  { id: 16, name: 'Togepi',     rarity: 1 },
+  { id: 17, name: 'Larvitar',   rarity: 1 },
+  { id: 18, name: 'Charizard',  rarity: 2 },
+  { id: 19, name: 'Gengar',     rarity: 2 },
+  { id: 20, name: 'Dragonite',  rarity: 2 },
+  { id: 21, name: 'Tyranitar',  rarity: 2 },
+  { id: 22, name: 'Mewtwo',     rarity: 3 },
+  { id: 23, name: 'Mew',        rarity: 3 }
+];
+
+const RARITY_WEIGHTS = [0.06, 0.035, 0.025, 0.01];
 
 // ── Species persistence ─────────────────────────────────────────────────────────
 
@@ -37,10 +69,17 @@ function loadSessionData() {
       let sCount = 0;
       for (const [id, idx] of Object.entries(data.species)) {
         if (sCount >= MAX_ENTRIES) break;
-        if (typeof idx === 'number' && idx >= 0) { sessionSpecies.set(id, idx); sCount++; }
+        if (typeof idx === 'number' && idx >= 0 && idx < SPECIES_DATA.length) {
+          sessionSpecies.set(id, idx);
+          sCount++;
+        }
       }
     }
-    if (typeof data.speciesCounter === 'number') speciesCounter = data.speciesCounter;
+    if (data && typeof data.collections === 'object') {
+      for (const [user, coll] of Object.entries(data.collections)) {
+        if (typeof coll === 'object') collections.set(user, coll);
+      }
+    }
   } catch (e) { /* file missing or corrupt, start fresh */ }
 }
 
@@ -50,7 +89,7 @@ function saveSessionData() {
     saveTimer = null;
     const data = {
       species: Object.fromEntries(sessionSpecies),
-      speciesCounter
+      collections: Object.fromEntries(collections)
     };
     try {
       fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
@@ -61,12 +100,30 @@ function saveSessionData() {
   }, 2000); // debounce 2s
 }
 
-function getSpeciesIndex(sessionId) {
+function rollSpecies() {
+  const roll = Math.random();
+  let cumulative = 0;
+  for (let i = 0; i < SPECIES_DATA.length; i++) {
+    cumulative += RARITY_WEIGHTS[SPECIES_DATA[i].rarity];
+    if (roll < cumulative) return i;
+  }
+  return 0;
+}
+
+function getOrRollSpecies(sessionId) {
   if (sessionSpecies.has(sessionId)) return sessionSpecies.get(sessionId);
-  const idx = speciesCounter++;
+  const idx = rollSpecies();
   sessionSpecies.set(sessionId, idx);
   saveSessionData();
   return idx;
+}
+
+function updateCollection(username, speciesId) {
+  if (!username || username === 'anonymous') return;
+  let coll = collections.get(username);
+  if (!coll) { coll = {}; collections.set(username, coll); }
+  coll[speciesId] = (coll[speciesId] || 0) + 1;
+  saveSessionData();
 }
 
 // ── Tool → status mapping ──────────────────────────────────────────────────────
@@ -118,7 +175,7 @@ function processLine(line, sessionId) {
 
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
-    broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
+    broadcast({ type: 'session_discovered', sessionId, speciesIndex: getOrRollSpecies(sessionId) });
   }
 
   if (obj.type === 'assistant' && obj.message && Array.isArray(obj.message.content)) {
@@ -236,7 +293,7 @@ function watchFile(filePath, { announce = false } = {}) {
     const sessionId = extractSessionId(filePath);
     if (!knownSessions.has(sessionId)) {
       knownSessions.add(sessionId);
-      broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
+      broadcast({ type: 'session_discovered', sessionId, speciesIndex: getOrRollSpecies(sessionId) });
     }
     console.log(`  ◈ Watching ${path.basename(filePath)}`);
   }
@@ -303,6 +360,12 @@ function handleHook(body) {
 
   const sessionId = data.session_id || 'unknown';
   const hookName = data.hook_event_name || '';
+  const username = data.username || 'anonymous';
+
+  // Track username for this session
+  if (username && username !== 'anonymous') {
+    sessionUsernames.set(sessionId, username);
+  }
 
   // Clear ended state if a new hook event arrives (session restarted)
   if (hookName !== 'SessionEnd') {
@@ -312,7 +375,9 @@ function handleHook(body) {
 
   if (!knownSessions.has(sessionId)) {
     knownSessions.add(sessionId);
-    broadcast({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) });
+    const speciesId = getOrRollSpecies(sessionId);
+    updateCollection(username, speciesId);
+    broadcast({ type: 'session_discovered', sessionId, speciesIndex: speciesId, username });
   }
 
   // Auto-watch transcript if provided (restrict to ~/.claude/projects/)
@@ -335,7 +400,8 @@ function handleHook(body) {
         type: 'hook_tool_start',
         sessionId,
         toolName,
-        status
+        status,
+        username
       });
       break;
     }
@@ -379,7 +445,8 @@ function handleHook(body) {
       break;
     }
     case 'UserPromptSubmit': {
-      broadcast({ type: 'hook_new_turn', sessionId });
+      const prompt = data.prompt || '';
+      broadcast({ type: 'hook_new_turn', sessionId, prompt, username });
       break;
     }
     case 'SessionStart': {
@@ -416,7 +483,8 @@ function handleHook(body) {
         break;
       }
 
-      broadcast({ type: 'hook_session_start', sessionId, replacesSessionId, speciesIndex: getSpeciesIndex(sessionId) });
+      const speciesId = getOrRollSpecies(sessionId);
+      broadcast({ type: 'hook_session_start', sessionId, replacesSessionId, speciesIndex: speciesId, username });
       break;
     }
     case 'SessionEnd': {
@@ -552,21 +620,31 @@ function startServer({ port, open }) {
   }});
 
   wss.on('connection', (ws) => {
-    // Send all known active sessions to new client (skip ended ones)
+    // Build agent list and send world_init with collections
     const hooksActive = checkHooksConfigured();
     const staleCutoff = Date.now() - 10 * 60 * 1000; // 10 minutes
+    const agents = [];
     for (const sessionId of knownSessions) {
       if (endedSessions.has(sessionId)) continue;
-      // When hooks are configured, only send sessions seen via hooks recently
-      // (avoids stale sessions from ctrl+C'd instances that never sent SessionEnd)
       if (hooksActive) {
         const lastSeen = sessionLastSeen.get(sessionId);
         if (!lastSeen || lastSeen < staleCutoff) continue;
       }
-      try {
-        ws.send(JSON.stringify({ type: 'session_discovered', sessionId, speciesIndex: getSpeciesIndex(sessionId) }));
-      } catch (e) {}
+      agents.push({
+        sessionId,
+        speciesIndex: getOrRollSpecies(sessionId),
+        username: sessionUsernames.get(sessionId) || 'anonymous',
+        isActive: true,
+        status: 'idle'
+      });
     }
+    try {
+      ws.send(JSON.stringify({
+        type: 'world_init',
+        agents,
+        collections: Object.fromEntries(collections)
+      }));
+    } catch (e) {}
   });
 
   loadSessionData();
@@ -625,7 +703,7 @@ function startServer({ port, open }) {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     const data = {
       species: Object.fromEntries(sessionSpecies),
-      speciesCounter
+      collections: Object.fromEntries(collections)
     };
     try {
       fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
