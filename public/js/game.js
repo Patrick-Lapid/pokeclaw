@@ -653,8 +653,6 @@ function PokemonEntity(sessionId, species, startCol, startRow, nestRef) {
   this.statusText = 'ready!'
   this.wanderTimer = randRange(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
   this.performTimer = 0
-  this.bubbleType = null
-  this.bubbleTimer = 0
   this.animFrame = 0
   this.animTimer = 0
   this.username = null
@@ -687,11 +685,6 @@ PokemonEntity.prototype.update = function(dt) {
       this.animTimer -= frameDur
       this.animFrame = (this.animFrame + 1) % animInfo.numFrames
     }
-  }
-
-  if (this.bubbleTimer > 0) {
-    this.bubbleTimer -= dt
-    if (this.bubbleTimer <= 0) this.bubbleType = null
   }
 
   // Perform actions (attack, shock, eat, work/pose)
@@ -922,36 +915,6 @@ PokemonEntity.prototype.drawLabels = function(ctx, screen, scale) {
     ctx.restore()
   }
 
-  if (this.isActive && this.state === 'work' && this.statusText) {
-    ctx.font = lvFontSize + 'px Silkscreen, monospace'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    var tw = ctx.measureText(this.statusText).width + 8
-    var th = lvFontSize + 6
-    var bx = screen.x - tw / 2
-    var by = spriteTop - th
-    ctx.fillStyle = 'rgba(15,31,10,0.85)'
-    ctx.fillRect(bx, by, tw, th)
-    ctx.fillStyle = '#48d848'
-    ctx.fillText(this.statusText, screen.x, by + th / 2)
-    ctx.textBaseline = 'alphabetic'
-  }
-
-  if (this.bubbleType && this.bubbleTimer > 0) {
-    var bbx = screen.x + 6 * scale
-    var bby = spriteTop - 4
-    var br = 6 * camera.zoom / 3
-    ctx.fillStyle = this.bubbleType === 'alert' ? '#f85848' : '#f0c040'
-    ctx.beginPath()
-    ctx.arc(bbx, bby, br, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold ' + Math.round(br * 1.3) + 'px "Press Start 2P", monospace'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(this.bubbleType === 'alert' ? '!' : '?', bbx, bby)
-    ctx.textBaseline = 'alphabetic'
-  }
 }
 
 // Render Loop
@@ -1397,8 +1360,6 @@ function handleMsg(m) {
       cr.isActive = true
       cr.statusText = 'ready!'
       if (m.prompt) cr.prompt = m.prompt
-      cr.bubbleType = null
-      cr.bubbleTimer = 0
       break
 
     case 'turn_end':
@@ -1418,12 +1379,8 @@ function handleMsg(m) {
       cr = pokemon.get(m.sessionId) || createPokemon(m.sessionId)
       if (!cr) break
       if (m.notificationType === 'permission_prompt') {
-        cr.bubbleType = 'alert'
-        cr.bubbleTimer = 30000
         cr.statusText = 'blocked!'
       } else if (m.notificationType === 'idle_prompt') {
-        cr.bubbleType = 'question'
-        cr.bubbleTimer = 5000
         cr.statusText = 'waiting\u2026'
       }
       break
